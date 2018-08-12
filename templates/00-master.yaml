@@ -1095,3 +1095,9 @@ Resources:
         DomainName:
           !Ref DomainName
       TemplateURL: https://s3.amazonaws.com/aws-refarch/moodle/latest/templates/05-route53.yaml
+      
+Outputs:
+  DnsName:
+    Description: DNS name of the new load balancer for Moodle.
+    Value:
+      !GetAtt publicalb.Outputs.PublicAlbDnsName

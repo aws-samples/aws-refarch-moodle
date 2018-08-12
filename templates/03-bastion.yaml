@@ -143,7 +143,11 @@ Parameters:
   Subnet:
     Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
     Type: List<AWS::EC2::Subnet::Id>
-
+  LatestAmiId :
+    Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
+    
+    
 Conditions:
 
   NumberOfSubnets1:
@@ -185,37 +189,6 @@ Conditions:
     - !Condition NumberOfSubnets6
   Subnet5: !Condition NumberOfSubnets6
 
-Mappings:
-
-  RegionMap:
-    ap-northeast-1:
-      AMI: ami-da9e2cbc
-    ap-northeast-2:
-      AMI: ami-1196317f
-    ap-south-1:
-      AMI: ami-d5c18eba
-    ap-southeast-1:
-      AMI: ami-c63d6aa5
-    ap-southeast-2:
-      AMI: ami-ff4ea59d
-    ca-central-1:
-      AMI: ami-d29e25b6
-    eu-central-1:
-      AMI: ami-bf2ba8d0
-    eu-west-1:
-      AMI: ami-1a962263
-    eu-west-2:
-      AMI: ami-e7d6c983
-    sa-east-1:
-      AMI: ami-286f2a44
-    us-east-1:
-      AMI: ami-55ef662f
-    us-east-2:
-      AMI: ami-15e9c770
-    us-west-1:
-      AMI: ami-a51f27c5
-    us-west-2:
-      AMI: ami-bf4193c7
 
 Resources:
 
@@ -258,7 +231,7 @@ Resources:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
       IamInstanceProfile: !Ref BastionInstanceProfile
-      ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+      ImageId: !Ref LatestAmiId
       InstanceMonitoring: true
       InstanceType: !Ref BastionInstanceType
       KeyName: !Ref EC2KeyName

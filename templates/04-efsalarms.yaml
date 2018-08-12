@@ -148,6 +148,9 @@ Parameters:
     Default: 180
     Description: Send warning alarm this many minutes before burst credit balance is zero.
     Type: String
+  LatestAmiId :
+    Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
 
 Conditions:
   
@@ -190,37 +193,6 @@ Conditions:
     - !Condition NumberOfSubnets6
   Subnet5: !Condition NumberOfSubnets6
 
-Mappings:
-
-  RegionMap:
-    ap-northeast-1:
-      AMI: ami-2a69be4c
-    ap-northeast-2:
-      AMI: ami-9bec36f5
-    ap-south-1:
-      AMI: ami-4fc58420
-    ap-southeast-1:
-      AMI: ami-0797ea64
-    ap-southeast-2:
-      AMI: ami-8536d6e7
-    ca-central-1:
-      AMI: ami-fd55ec99
-    eu-central-1:
-      AMI: ami-c7ee5ca8
-    eu-west-1:
-      AMI: ami-acd005d5
-    eu-west-2:
-      AMI: ami-1a7f6d7e
-    sa-east-1:
-      AMI: ami-f1344b9d
-    us-east-1:
-      AMI: ami-8c1be5f6
-    us-east-2:
-      AMI: ami-c5062ba0
-    us-west-1:
-      AMI: ami-02eada62
-    us-west-2:
-      AMI: ami-e689729e
 
 Resources:
 
@@ -483,7 +455,7 @@ Resources:
             VolumeSize: 10
             VolumeType: gp2
       IamInstanceProfile: !Ref InstanceProfile
-      ImageId: !FindInMap [ RegionMap, !Ref 'AWS::Region', AMI ]
+      ImageId: !Ref LatestAmiId
       InstanceMonitoring: true
       InstanceType: !Ref InstanceType
       KeyName: !Ref EC2KeyName
