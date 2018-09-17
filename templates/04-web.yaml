@@ -593,14 +593,15 @@ Resources:
                   'dbcollation' => 'utf8mb4_unicode_ci',
                 );
                 // Hostname definition //
-                $proto = 'https://';
                 $hostname = '${DomainName}';
                 if ($hostname == '') {
-                  $proto = 'http://';
-                  $hostname = '${PublicAlbHostname}';
+                  $hostwithprotocol = '${PublicAlbHostname}';
                 }
-                $CFG->wwwroot = $proto . strtolower($hostname);
-                $CFG->sslproxy = ($proto == 'https://' ? true : false);
+                else {
+                  $hostwithprotocol = ‘https://’ . strtolower($hostname);
+                }
+                $CFG->wwwroot = strtolower($hostwithprotocol);
+                $CFG->sslproxy = (substr($hostwithprotocol,0,5)==’https’ ? true : false);
                 // Moodledata location //
                 $CFG->dataroot = '/var/www/moodle/data';
                 $CFG->tempdir = '/var/www/moodle/temp';
