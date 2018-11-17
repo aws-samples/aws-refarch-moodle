@@ -58,6 +58,13 @@ Parameters:
       - db.r4.4xlarge
       - db.r4.8xlarge
       - db.r4.16xlarge
+      - db.r3.large
+      - db.r3.xlarge
+      - db.r3.2xlarge
+      - db.r3.4xlarge
+      - db.r3.8xlarge
+      - db.t2.medium
+      - db.t2.small
     ConstraintDescription: Must be a valid RDS instance class.
     Default: db.r4.large
     Description: The Amazon RDS database instance class.
