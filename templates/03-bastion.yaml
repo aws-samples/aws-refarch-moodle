@@ -200,7 +200,7 @@ Resources:
       HealthCheckType: EC2
       LaunchConfigurationName: !Ref BastionLaunchConfiguration
       MaxSize: 1
-      MinSize: 0
+      MinSize: 1
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Bastion / ', !Ref 'AWS::StackName' ] ]

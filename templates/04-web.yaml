@@ -149,7 +149,7 @@ Parameters:
   WebAsgMin:
     AllowedPattern: ^([0-0]?[0-9]|10)$
     ConstraintDescription: Must be a number between 0 and 10.
-    Default: 2
+    Default: 1
     Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
     Type: String
   WebInstanceType:
@@ -531,7 +531,6 @@ Resources:
             yum:
               awslogs: []
               httpd24: []
-              postgresql93: []
               php70: []
               php70-pgsql: []
               php70-gd: []
@@ -540,6 +539,7 @@ Resources:
               php70-mbstring: []
               php70-xmlrpc: []
               php70-zip: []
+              php70-mysqlnd.x86_64: []
           files:
             /tmp/create_site_conf.sh:
               content: !Sub |
@@ -642,7 +642,7 @@ Resources:
               content: !Sub |
                 <?php
                 $CFG = new stdClass;
-                $CFG->dbtype = 'pgsql';
+                $CFG->dbtype = 'mariadb';
                 $CFG->dblibrary = 'native';
                 $CFG->dbhost = '${DatabaseClusterEndpointAddress}';
                 $CFG->dbname = '${DatabaseName}';
@@ -663,10 +663,10 @@ Resources:
                   $hostwithprotocol = '${PublicAlbHostname}';
                 }
                 else {
-                  $hostwithprotocol = ‘https://’ . strtolower($hostname);
+                  $hostwithprotocol = ‘https://' . strtolower($hostname);
                 }
                 $CFG->wwwroot = strtolower($hostwithprotocol);
-                $CFG->sslproxy = (substr($hostwithprotocol,0,5)==’https’ ? true : false);
+                $CFG->sslproxy = (substr($hostwithprotocol,0,5)=='https' ? true : false);
                 // Moodledata location //
                 $CFG->dataroot = '/var/www/moodle/data';
                 $CFG->tempdir = '/var/www/moodle/temp';
@@ -692,7 +692,7 @@ Resources:
             /tmp/install_moodle.sh:
               content:  !Sub |
                 #!/bin/bash -xe
-                wget -O /tmp/moodle.tgz https://download.moodle.org/stable34/moodle-3.4.tgz  
+                wget -O /tmp/moodle.tgz https://download.moodle.org/stable35/moodle-latest-35.tgz  
                 tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /var/www/moodle/html/
                 mv /tmp/config.php /var/www/moodle/html/config.php
                 chown -R root:apache /var/www/moodle/html

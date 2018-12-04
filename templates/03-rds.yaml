@@ -156,13 +156,13 @@ Resources:
       BackupRetentionPeriod: 30
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine: aurora-postgresql
-      DBClusterParameterGroupName: default.aurora-postgresql9.6
+      Engine: aurora-mysql
+      DBClusterParameterGroupName: default.aurora-mysql5.7
       KmsKeyId:
         !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
       MasterUsername: !Ref DatabaseMasterUsername
       MasterUserPassword: !Ref DatabaseMasterPassword
-      Port: 5432
+      Port: 3306
       StorageEncrypted: !Ref DatabaseEncrpytedBoolean
       Tags:
         - Key: Name
@@ -178,7 +178,7 @@ Resources:
       DBClusterIdentifier: !Ref DatabaseCluster
       DBInstanceClass: !Ref DatabaseInstanceType
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine: aurora-postgresql
+      Engine: aurora-mysql
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
@@ -191,7 +191,6 @@ Resources:
       DBClusterIdentifier: !Ref DatabaseCluster
       DBInstanceClass: !Ref DatabaseInstanceType
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine: aurora-postgresql
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
