@@ -598,10 +598,10 @@ Resources:
                   $hostwithprotocol = '${PublicAlbHostname}';
                 }
                 else {
-                  $hostwithprotocol = ‘https://’ . strtolower($hostname);
+                  $hostwithprotocol = 'https://' . strtolower($hostname);
                 }
                 $CFG->wwwroot = strtolower($hostwithprotocol);
-                $CFG->sslproxy = (substr($hostwithprotocol,0,5)==’https’ ? true : false);
+                $CFG->sslproxy = (substr($hostwithprotocol,0,5)=='https' ? true : false);
                 // Moodledata location //
                 $CFG->dataroot = '/var/www/moodle/data';
                 $CFG->tempdir = '/var/www/moodle/temp';
