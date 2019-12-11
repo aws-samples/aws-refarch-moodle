@@ -150,7 +150,7 @@ Resources:
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DataSubnetGroup
       Engine: aurora-postgresql
-      DBClusterParameterGroupName: default.aurora-postgresql9.6
+      DBClusterParameterGroupName: default.aurora-postgresql10
       KmsKeyId:
         !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
       MasterUsername: !Ref DatabaseMasterUsername
