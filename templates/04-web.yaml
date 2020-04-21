@@ -260,7 +260,7 @@ Parameters:
     Default: en
   LatestAmiId :
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
 
 Conditions:
@@ -462,23 +462,13 @@ Resources:
             - install_opcache
             - start_webserver
         install_webserver:
-          packages:
-            yum:
-              awslogs: []
-              httpd24: []
-              postgresql93: []
-              php70: []
-              php70-pgsql: []
-              php70-gd: []
-              php70-soap: []
-              php70-intl: []
-              php70-mbstring: []
-              php70-xmlrpc: []
-              php70-zip: []
           files:
             /tmp/create_site_conf.sh:
               content: !Sub |
                 #!/bin/bash -xe
+                amazon-linux-extras install -y php7.3 postgresql9.6 
+                yum install -y awslogs httpd php-pgsql php-gd php-soap php-intl php-mbstring php-xmlrpc php-zip
+                sed -i 's/memory_limit =.*/memory_limit = 2048M/' /etc/php.ini
                 if [ ! -f /etc/httpd/conf.d/moodle.conf ]; then                    
                    touch /etc/httpd/conf.d/moodle.conf
                    echo 'ServerName 127.0.0.1:80' >> /etc/httpd/conf.d/moodle.conf
@@ -560,7 +550,7 @@ Resources:
               command: mkdir -p /var/awslogs/state
           services:
             sysvinit:
-              awslogs:
+              awslogsd:
                 enabled: 'true'
                 ensureRunning: 'true'
                 files: /etc/awslogs/awslogs.conf
@@ -607,6 +597,8 @@ Resources:
                 $CFG->tempdir = '/var/www/moodle/temp';
                 $CFG->cachedir = '/var/www/moodle/cache';
                 $CFG->localcachedir = '/var/www/moodle/local';
+                $CFG->directorypermissions = 02777;
+                $CFG->admin = 'admin';
                 // Configure Session Cache
                 $SessionEndpoint = '${ElastiCacheClusterEndpointAddress}';
                 if ($SessionEndpoint != '') {
@@ -615,9 +607,13 @@ Resources:
                   $CFG->session_memcached_save_path = $SessionEndpoint;
                   $CFG->session_memcached_prefix = 'memc.sess.key.';
                   $CFG->session_memcached_acquire_lock_timeout = 120;
-                  $CFG->session_memcached_lock_expire = 7200;
+                  $CFG->session_memcached_lock_expire = 7100;
                   $CFG->session_memcached_lock_retry_sleep = 150;
                 }
+                //@error_reporting(E_ALL | E_STRICT);   // NOT FOR PRODUCTION SERVERS!
+                //@ini_set('display_errors', '1');         // NOT FOR PRODUCTION SERVERS!
+                //$CFG->debug = (E_ALL | E_STRICT);   // === DEBUG_DEVELOPER - NOT FOR PRODUCTION SERVERS!
+                //$CFG->debugdisplay = 1; 
                 require_once(__DIR__ . '/lib/setup.php');
                 // END OF CONFIG //
                 ?>
@@ -627,9 +623,9 @@ Resources:
             /tmp/install_moodle.sh:
               content:  !Sub |
                 #!/bin/bash -xe
-                wget -O /tmp/moodle.tgz https://download.moodle.org/stable34/moodle-3.4.tgz  
+                wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable38/moodle-3.8.2.tgz
                 tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /var/www/moodle/html/
-                mv /tmp/config.php /var/www/moodle/html/config.php
+                cp /tmp/config.php /var/www/moodle/html/config.php
                 chown -R root:apache /var/www/moodle/html
                 chown -R apache:apache /var/www/moodle/local
                 
@@ -652,17 +648,17 @@ Resources:
                   #!/bin/bash -xe
                   
                   #Install memcached and then remove it. Memcached is not actually needed. We install amazon-elasticache-cluster-client.so instead. However Moodle does not detect memcached is installed. Therefore, this tricks Moodle into thinking it is installed.
-                  sudo yum install -y php70-pecl-memcached
-                  sudo yum remove -y php70-pecl-memcached
+                  sudo yum install -y php-pecl-memcached
+                  sudo yum remove -y php-pecl-memcached
                   
-                  wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-7.0/latest-64bit
-                  tar -xf '/tmp/latest-64bit'
-                  cp '/tmp/artifact/amazon-elasticache-cluster-client.so' /usr/lib64/php/7.0/modules/
-                  if [ ! -f /etc/php-7.0.d/50-memcached.ini ]; then
-                      touch /etc/php-7.0.d/50-memcached.ini
+                  wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-7.3/latest-64bit
+                  tar -xf '/tmp/latest-64bit' 
+                  cp '/tmp/amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
+                  if [ ! -f /etc/php.d/50-memcached.ini ]; then
+                      touch /etc/php.d/50-memcached.ini
                   fi
-                  echo 'extension=/usr/lib64/php/7.0/modules/amazon-elasticache-cluster-client.so;' >> /etc/php-7.0.d/50-memcached.ini
-                  echo 'extension=igbinary.so;' >> /etc/php-7.0.d/50-memcached.ini
+                  echo 'extension=/usr/lib64/php/modules/amazon-elasticache-cluster-client.so;' >> /etc/php.d/50-memcached.ini
+                  echo 'extension=igbinary.so;' >> /etc/php.d/50-memcached.ini
                   
                   #update Moodle source to use DYNAMIC_CLIENT_MODE so Moodle can detect changes to the elasticache cluster membership
                   sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
@@ -678,7 +674,7 @@ Resources:
         install_opcache:
           packages:
             yum:
-              php70-opcache: []
+              php-opcache: []
           files:
             /tmp/install_opcache.sh:
               content:
@@ -689,14 +685,14 @@ Resources:
                       mkdir -p /var/www/.opcache
                   fi
                   #Ensure opcache is enabled and add settings recomended by moodle at https://docs.moodle.org/34/en/OPcache
-                  sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/opcache.max_accelerated_files=.*/opcache.max_accelerated_files=8000/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=300/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/;opcache.use_cwd=.*/opcache.use_cwd=1/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/;opcache.validate_timestamps=.*/opcache.validate_timestamps=1/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' /etc/php-7.0.d/10-opcache.ini
-                  sed -i 's/;opcache.enable_file_override=.*/opcache.enable_file_override=60/' /etc/php-7.0.d/10-opcache.ini
+                  sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php.d/10-opcache.ini
+                  sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php.d/10-opcache.ini
+                  sed -i 's/opcache.max_accelerated_files=.*/opcache.max_accelerated_files=8000/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=300/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.use_cwd=.*/opcache.use_cwd=1/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.validate_timestamps=.*/opcache.validate_timestamps=1/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.enable_file_override=.*/opcache.enable_file_override=60/' /etc/php.d/10-opcache.ini
               mode: 000500
               owner: root
               group: root
