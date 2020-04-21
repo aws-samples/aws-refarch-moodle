@@ -156,7 +156,7 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
   LatestAmiId :
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn-ami-hvm-x86_64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     
 
 Conditions:
@@ -356,7 +356,7 @@ Resources:
           packages:
             yum:
               #Only needed to set permissions on the moodle folder
-              httpd24: []
+              httpd: []
           files:              
             /tmp/efs-add-storage.sh:
               content: !Sub |
@@ -461,11 +461,10 @@ Resources:
             "repo_update: true\n",
             "repo_upgrade: all\n",
             "\n",
-            "packages:\n",
-            "- parallel\n",
-            "\n",
             "runcmd:\n",
-            "- yum --enablerepo=epel install nload -y\n",
+            "- yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm\n",
+            "- yum-config-manager --enable epel\n",
+            "- yum install -y parallel",
             "- ntpstat\n",
             "- /opt/aws/bin/cfn-init --configsets efs_add_storage --verbose --stack ", !Ref 'AWS::StackName', " --resource LaunchConfiguration --region ", !Ref 'AWS::Region',"\n",
             "- /tmp/efs-add-storage.sh ", !Ref ElasticFileSystem, " throughput_data ", !Ref Growth,"\n",

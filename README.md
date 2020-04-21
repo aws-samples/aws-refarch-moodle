@@ -6,7 +6,7 @@
 
 © 2018 Amazon Web Services, Inc. and its affiliates. All rights reserved. This work may not be reproduced or redistributed, in whole or in part, without prior written permission from Amazon Web Services, Inc. Commercial copying, lending, or selling is prohibited.
 
-Errors or corrections? Email us at [beabrian@amazon.com](mailto:beabrian@amazon.com).
+Errors or corrections? Email us at [johntrol@amazon.com](mailto:johntrol@amazon.com).
 
 ---
 
