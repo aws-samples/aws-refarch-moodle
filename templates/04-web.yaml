@@ -623,7 +623,7 @@ Resources:
             /tmp/install_moodle.sh:
               content:  !Sub |
                 #!/bin/bash -xe
-                wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable38/moodle-3.8.2.tgz
+                wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable38/moodle-3.8.3.tgz
                 tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /var/www/moodle/html/
                 cp /tmp/config.php /var/www/moodle/html/config.php
                 chown -R root:apache /var/www/moodle/html
