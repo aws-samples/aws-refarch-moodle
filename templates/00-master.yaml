@@ -56,7 +56,7 @@ Metadata:
         - DatabaseEncrpytedBoolean
         - DatabaseCmk
         - DatabaseMasterUsername
-        - DatabaseMasterPassword
+        # - DatabaseMasterPassword
         - DatabaseName
     - Label:
         default: Caching Tier
@@ -95,8 +95,8 @@ Metadata:
         default: DB Instance Class
       DatabaseMasterUsername:
         default: DB Master Username
-      DatabaseMasterPassword:
-        default: DB Master Password
+      # DatabaseMasterPassword:
+      #   default: DB Master Password
       DatabaseName:
         default: DB Name
       EfsCmk:
@@ -319,14 +319,14 @@ Parameters:
     MinLength: 1
     Type: String
     Default: moodle
-  DatabaseMasterPassword:
-    AllowedPattern: ^([a-zA-Z0-9`~!#$%^&*()_+,\\-])*$
-    ConstraintDescription: Must be letters (upper or lower), numbers, spaces, and these special characters `~!#$%^&*()_+,-
-    Description: The Amazon RDS master password. Letters, numbers, spaces, and these special characters `~!#$%^&*()_+,-
-    MaxLength: 41
-    MinLength: 8
-    NoEcho: true
-    Type: String
+  # DatabaseMasterPassword:
+  #   AllowedPattern: ^([a-zA-Z0-9`~!#$%^&*()_+,\\-])*$
+  #   ConstraintDescription: Must be letters (upper or lower), numbers, spaces, and these special characters `~!#$%^&*()_+,-
+  #   Description: The Amazon RDS master password. Letters, numbers, spaces, and these special characters `~!#$%^&*()_+,-
+  #   MaxLength: 41
+  #   MinLength: 8
+  #   NoEcho: true
+  #   Type: String
   DatabaseName:
     AllowedPattern: ^([a-zA-Z0-9]*)$
     Description: The Amazon RDS master database name.
@@ -806,6 +806,15 @@ Conditions:
     !Equals [ true, !Ref UseCloudFrontBoolean ]   
 
 Resources:
+  MyRDSInstanceSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Description: 'This is the secret for my RDS instance'
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DatabaseMasterUsername}"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
   vpc:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -900,16 +909,16 @@ Resources:
           !GetAtt [ vpc, Outputs.Vpc ]
       TemplateURL: https://s3.amazonaws.com/aws-refarch/moodle/latest/templates/03-publicalb.yaml
   rds:
-    DependsOn: [ securitygroups, securitygroups ]
+    DependsOn: [ securitygroups ]
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
         DatabaseInstanceType:
           !Ref DatabaseInstanceType
-        DatabaseMasterUsername:
-          !Ref DatabaseMasterUsername
-        DatabaseMasterPassword:
-          !Ref DatabaseMasterPassword
+        # DatabaseMasterUsername:
+        #   !Ref DatabaseMasterUsername
+        MyRDSInstanceSecretArn:
+          !Ref MyRDSInstanceSecret
         DatabaseName:
           !Ref DatabaseName
         DatabaseEncrpytedBoolean:
@@ -989,10 +998,10 @@ Resources:
       Parameters:
         DatabaseClusterEndpointAddress:
           !GetAtt [ rds, Outputs.DatabaseClusterEndpointAddress ]
-        DatabaseMasterUsername:
-          !Ref DatabaseMasterUsername
-        DatabaseMasterPassword:
-          !Ref DatabaseMasterPassword
+        # DatabaseMasterUsername:
+        #   !Ref DatabaseMasterUsername
+        MyRDSInstanceSecretArn:
+          !Ref MyRDSInstanceSecret
         DatabaseName:
           !Ref DatabaseName
         ElasticFileSystem:
@@ -1032,10 +1041,10 @@ Resources:
       Parameters:
         DatabaseClusterEndpointAddress:
           !GetAtt [ rds, Outputs.DatabaseClusterEndpointAddress ]
-        DatabaseMasterUsername:
-          !Ref DatabaseMasterUsername
-        DatabaseMasterPassword:
-          !Ref DatabaseMasterPassword
+        # DatabaseMasterUsername:
+        #   !Ref DatabaseMasterUsername
+        MyRDSInstanceSecretArn:
+          !Ref MyRDSInstanceSecret
         DatabaseName:
           !Ref DatabaseName
         ElasticFileSystem:

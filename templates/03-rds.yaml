@@ -10,8 +10,8 @@ Metadata:
         default: Database Parameters
       Parameters:
         - DatabaseInstanceType
-        - DatabaseMasterUsername
-        - DatabaseMasterPassword
+        # - DatabaseMasterUsername
+        # - DatabaseMasterPassword
         - DatabaseName
         - DatabaseEncrpytedBoolean
         - DatabaseCmk
@@ -25,10 +25,10 @@ Metadata:
         default: AWS KMS Customer Master Key (CMK) to encrypt DB 
       DatabaseInstanceType:
         default: DB Instance Class 
-      DatabaseMasterUsername:
-        default: DB Master Username
-      DatabaseMasterPassword:
-        default: DB Master Password
+      # DatabaseMasterUsername:
+      #   default: DB Master Username
+      # DatabaseMasterPassword:
+      #   default: DB Master Password
       DatabaseName:
         default: DB Name
       DatabaseSecurityGroup:
@@ -62,20 +62,22 @@ Parameters:
     Default: db.r4.large
     Description: The Amazon RDS database instance class.
     Type: String
-  DatabaseMasterUsername:
-    AllowedPattern: ^([a-zA-Z0-9]*)$
-    Description: The Amazon RDS master username.
-    ConstraintDescription: Must contain only alphanumeric characters and be at least 8 characters.
-    MaxLength: 16
-    MinLength: 1
-    Type: String
-  DatabaseMasterPassword:
-    AllowedPattern: ^([a-z0-9A-Z`~!#$%^&*()_+,\\-])*$
-    ConstraintDescription: Must be letters (upper or lower), numbers, and these special characters '_'`~!#$%^&*()_+,-    
-    Description: The Amazon RDS master password.
-    MaxLength: 41
-    MinLength: 8
-    NoEcho: true
+  # DatabaseMasterUsername:
+  #   AllowedPattern: ^([a-zA-Z0-9]*)$
+  #   Description: The Amazon RDS master username.
+  #   ConstraintDescription: Must contain only alphanumeric characters and be at least 8 characters.
+  #   MaxLength: 16
+  #   MinLength: 1
+  #   Type: String
+  # DatabaseMasterPassword:
+  #   AllowedPattern: ^([a-z0-9A-Z`~!#$%^&*()_+,\\-])*$
+  #   ConstraintDescription: Must be letters (upper or lower), numbers, and these special characters '_'`~!#$%^&*()_+,-    
+  #   Description: The Amazon RDS master password.
+  #   MaxLength: 41
+  #   MinLength: 8
+  #   NoEcho: true
+  #   Type: String
+  MyRDSInstanceSecretArn:
     Type: String
   DatabaseName:
     AllowedPattern: ^([a-zA-Z0-9]*)$
@@ -142,7 +144,6 @@ Conditions:
     !Equals ['', !Ref DatabaseCmk]
 
 Resources:
-
   DatabaseCluster:
     Type: AWS::RDS::DBCluster
     Properties:
@@ -153,8 +154,8 @@ Resources:
       DBClusterParameterGroupName: default.aurora-postgresql11
       KmsKeyId:
         !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
-      MasterUsername: !Ref DatabaseMasterUsername
-      MasterUserPassword: !Ref DatabaseMasterPassword
+      MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:username}}' ]]
+      MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:password}}' ]]
       Port: 5432
       StorageEncrypted: !Ref DatabaseEncrpytedBoolean
       Tags:
@@ -231,4 +232,5 @@ Outputs:
     Value: !Ref DataSubnetGroup
   DatabaseClusterEndpointAddress:
     Value: !GetAtt DatabaseCluster.Endpoint.Address
+  
 
