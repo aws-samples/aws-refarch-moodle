@@ -584,7 +584,7 @@ Resources:
 
                   $client = new SecretsManagerClient([
                       'version' => '2017-10-17',
-                      'region' => 'us-east-1',
+                      'region' => '${AWS::Region}',
                   ]);
 
                   $secretName = '${MyRDSInstanceSecretArn}';
