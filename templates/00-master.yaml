@@ -11,6 +11,7 @@ Metadata:
     - Label:
         default: General AWS
       Parameters:
+        - DeploymentLocation
         - EC2KeyName
         - SshAccessCidr
         - HostedZoneName
@@ -85,6 +86,8 @@ Metadata:
       Parameters:
         - MoodleLocale
     ParameterLabels:
+      DeploymentLocation:
+        default: Location to deploy from (S3 URL)
       BastionInstanceType:
         default: Bastion Instance Type
       CloudFrontAcmCertificate:
@@ -188,6 +191,9 @@ Metadata:
 
 
 Parameters:
+  DeploymentLocation:
+    Description: Location to deploy from (S3 URL)
+    Type: String    
   BastionInstanceType:
     AllowedValues:
     - t2.nano 
@@ -881,7 +887,7 @@ Resources:
           !Ref DataSubnet4Cidr
         DataSubnet5Cidr:
           !Ref DataSubnet5Cidr
-      TemplateURL: 01-newvpc.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/01-newvpc.yaml'
   securitygroups:
     DependsOn: vpc
     Type: AWS::CloudFormation::Stack
@@ -891,7 +897,7 @@ Resources:
           !Ref SshAccessCidr
         Vpc:
           !GetAtt [ vpc, Outputs.Vpc ]
-      TemplateURL: 02-securitygroups.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/02-securitygroups.yaml'
   bastion:
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
@@ -907,7 +913,7 @@ Resources:
           !Ref NumberOfAZs
         Subnet:
           !GetAtt [ vpc, Outputs.PublicSubnet ]
-      TemplateURL: 03-bastion.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/03-bastion.yaml'
   publicalb:
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
@@ -923,7 +929,7 @@ Resources:
           !GetAtt [ securitygroups, Outputs.PublicAlbSecurityGroup ]
         Vpc:
           !GetAtt [ vpc, Outputs.Vpc ]
-      TemplateURL: 03-publicalb.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/03-publicalb.yaml'
   rds:
     DependsOn: [ securitygroups ]
     Type: AWS::CloudFormation::Stack
@@ -949,7 +955,7 @@ Resources:
           !GetAtt [ vpc, Outputs.DataSubnet ]
         NumberOfSubnets:
           !Ref NumberOfAZs
-      TemplateURL: 03-rds.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/03-rds.yaml'
   efsfilesystem:
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
@@ -973,7 +979,7 @@ Resources:
           !Ref EfsPerformanceMode
         Subnet:
           !GetAtt [ vpc, Outputs.DataSubnet ]
-      TemplateURL: 03-efsfilesystem.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/03-efsfilesystem.yaml'
   sessioncache:
     Condition: DeployWithSessionCache
     DependsOn: securitygroups
@@ -992,7 +998,7 @@ Resources:
           !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
         NumberOfSubnets:
           !Ref NumberOfAZs
-      TemplateURL: 03-elasticache.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/03-elasticache.yaml'
   applicationcache:
     Condition: DeployApplicationCache
     DependsOn: securitygroups
@@ -1011,7 +1017,7 @@ Resources:
           !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
         NumberOfSubnets:
           !Ref NumberOfAZs
-      TemplateURL: 03-elasticache.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/03-elasticache.yaml'
   webnocache:
     DependsOn: [ publicalb, rds, efsfilesystem ]
     Condition: DeployWithoutSessionCache
@@ -1054,7 +1060,7 @@ Resources:
           !Ref MoodleLocale
         ElastiCacheClusterEndpointAddress:
           ''
-      TemplateURL: 04-web.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/04-web.yaml'
   webcached:
     DependsOn: [ publicalb, rds, efsfilesystem, sessioncache ]
     Condition: DeployWithSessionCache
@@ -1097,7 +1103,7 @@ Resources:
           !Ref MoodleLocale
         ElastiCacheClusterEndpointAddress:
           !GetAtt sessioncache.Outputs.ElastiCacheClusterEndpointAddress
-      TemplateURL: 04-web.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/04-web.yaml'
   cloudfront:
     Condition: DeployCloudFront
     DependsOn: publicalb    
@@ -1110,7 +1116,7 @@ Resources:
           !GetAtt [ publicalb, Outputs.PublicAlbDnsName ]
         DomainName:
           !Ref DomainName
-      TemplateURL: 04-cloudfront.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/04-cloudfront.yaml'
   route53:
     Condition: DeployRoute53
     DependsOn: publicalb
@@ -1125,7 +1131,7 @@ Resources:
           !Ref HostedZoneName
         DomainName:
           !Ref DomainName
-      TemplateURL: 05-route53.yaml
+      TemplateURL: !Sub '${DeploymentLocation}/05-route53.yaml'
       
 Outputs:
   DnsName:
