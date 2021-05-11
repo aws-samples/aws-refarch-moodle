@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: Reference Architecture to host Moodle on AWS - Creates RDS Aurora PostgreSQL database cluster
+Description: Reference Architecture to host Moodle on AWS - Creates RDS Aurora MySQL or PostgreSQL database cluster
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -9,6 +9,7 @@ Metadata:
     - Label:
         default: Database Parameters
       Parameters:
+        - DatabaseType
         - DatabaseInstanceType
         # - DatabaseMasterUsername
         # - DatabaseMasterPassword
@@ -19,6 +20,8 @@ Metadata:
         - NumberOfSubnets
         - Subnet
     ParameterLabels:
+      DatabaseType:
+        default: Aurora database type
       DatabaseEncrpytedBoolean:
         default: Encrypted DB Cluster
       DatabaseCmk:
@@ -95,13 +98,16 @@ Parameters:
     - 6
     Default: 3
     Description: Number of subnets. This must match your selections in the list of subnets below.
-    Type: String 
+    Type: String
   Subnet:
     Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
     Type: List<AWS::EC2::Subnet::Id>
 
 Conditions:
-
+  UseMySQL:
+    !Equals [!Ref DatabaseType, MySQL]
+  UsePostgreSQL:
+    !Equals [!Ref DatabaseType, PostgreSQL]
   NumberOfSubnets1:
       !Equals [ 1, !Ref NumberOfSubnets ]
   NumberOfSubnets2:
@@ -156,6 +162,9 @@ Resources:
         !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:password}}' ]]
+      Port:
+        !If [ UsePostgreSQL, 5432, 3306 ]
+
       Port: 5432
       StorageEncrypted: !Ref DatabaseEncrpytedBoolean
       Tags:
@@ -172,7 +181,8 @@ Resources:
       DBClusterIdentifier: !Ref DatabaseCluster
       DBInstanceClass: !Ref DatabaseInstanceType
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine: aurora-postgresql
+      Engine:
+        !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
@@ -185,7 +195,8 @@ Resources:
       DBClusterIdentifier: !Ref DatabaseCluster
       DBInstanceClass: !Ref DatabaseInstanceType
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine: aurora-postgresql
+      Engine:
+        !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
@@ -232,5 +243,7 @@ Outputs:
     Value: !Ref DataSubnetGroup
   DatabaseClusterEndpointAddress:
     Value: !GetAtt DatabaseCluster.Endpoint.Address
+  DatabaseClusterEndpointPort:
+    Value: !GetAtt DatabaseCluster.Endpoint.Port
   
 
