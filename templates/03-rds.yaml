@@ -42,7 +42,13 @@ Metadata:
         default: Subnets
 
 Parameters:
-
+  DatabaseType:
+    AllowedValues:
+      - MySQL
+      - PostgreSQL
+    Default: PostgreSQL
+    Description: Indicates whether to use Aurora MySQL or PostgreSQL.
+    Type: String
   DatabaseEncrpytedBoolean:
     AllowedValues:
       - true

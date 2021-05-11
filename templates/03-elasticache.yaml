@@ -31,7 +31,13 @@ Metadata:
         default: Subnets
 
 Parameters:
-
+  CacheType:
+    AllowedValues:
+      - Redis
+      - Memcached
+    Default: Memcached
+    Description: Indicates whether to use ElastiCache Memcached or Redis. 
+    Type: String
   ElastiCacheClusterName:
     AllowedPattern: ^([a-zA-Z0-9]*)$
     Description: The ElastiCache cluster name. Defaults to the Amazon RDS database name.
