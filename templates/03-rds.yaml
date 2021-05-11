@@ -162,16 +162,16 @@ Resources:
       BackupRetentionPeriod: 30
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine: aurora-postgresql
-      DBClusterParameterGroupName: default.aurora-postgresql11
+      Engine:
+        !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
+      DBClusterParameterGroupName:
+        !If [ UsePostgreSQL, default.aurora-postgresql11, default.aurora-mysql5.7 ]        
       KmsKeyId:
         !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:password}}' ]]
       Port:
         !If [ UsePostgreSQL, 5432, 3306 ]
-
-      Port: 5432
       StorageEncrypted: !Ref DatabaseEncrpytedBoolean
       Tags:
         - Key: Name
