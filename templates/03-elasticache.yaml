@@ -10,12 +10,15 @@ Metadata:
     - Label:
         default: Cache Parameters
       Parameters:
+        - CacheType
         - ElastiCacheNodeType
         - ElastiCacheClusterName
         - ElastiCacheSecurityGroup
         - NumberOfSubnets
         - Subnet
     ParameterLabels:
+      CacheType:
+        default: Cache Type
       ElastiCacheClusterName:
         default: Cache Cluster Name
       ElastiCacheNodeType:
