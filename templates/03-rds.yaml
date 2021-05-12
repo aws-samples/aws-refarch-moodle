@@ -251,5 +251,6 @@ Outputs:
     Value: !GetAtt DatabaseCluster.Endpoint.Address
   DatabaseClusterEndpointPort:
     Value: !GetAtt DatabaseCluster.Endpoint.Port
-  
+  DatabaseClusterReadEndpointAddress:
+    Value: !GetAtt DatabaseCluster.ReadEndpoint.Address  
 
