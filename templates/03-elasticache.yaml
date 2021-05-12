@@ -89,7 +89,10 @@ Parameters:
     Type: List<AWS::EC2::Subnet::Id>
 
 Conditions:
-
+  UseRedis:
+    !Equals [!Ref CacheType, Redis]
+  UseMemcached:
+    !Equals [!Ref CacheType, Memcached]
   NumberOfSubnets1:
       !Equals [ 1, !Ref NumberOfSubnets ]
   NumberOfSubnets2:
@@ -130,8 +133,25 @@ Conditions:
   Subnet5: !Condition NumberOfSubnets6
 
 Resources:
-
-  ElastiCacheCluster:
+  ElastiCacheClusterRedis:
+    Condition: UseRedis
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Ref ElastiCacheClusterName
+      ReplicationGroupDescription: !Ref ElastiCacheClusterName
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: false
+      AutoMinorVersionUpgrade: true
+      MultiAZEnabled: true
+      CacheNodeType: !Ref ElastiCacheNodeType
+      CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
+      SecurityGroupIds:
+        - !Ref ElastiCacheSecurityGroup
+      Engine: redis
+      NumCacheClusters:
+        !Ref NumberOfSubnets
+  ElastiCacheClusterMemcached:
+    Condition: UseMemcached
     Type: AWS::ElastiCache::CacheCluster
     Properties:
       AZMode: cross-az
@@ -175,4 +195,4 @@ Resources:
           ]
 Outputs:
   ElastiCacheClusterEndpointAddress:
-    Value: !GetAtt ElastiCacheCluster.ConfigurationEndpoint.Address
+    Value: !If [UseRedis, !GetAtt ElastiCacheClusterRedis.ConfigurationEndPoint.Address, !GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Address ]
