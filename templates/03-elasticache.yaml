@@ -195,4 +195,4 @@ Resources:
           ]
 Outputs:
   ElastiCacheClusterEndpointAddress:
-    Value: !If [UseRedis, !GetAtt ElastiCacheClusterRedis.ConfigurationEndPoint.Address, !GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Address ]
+    Value: !If [UseRedis, !GetAtt ElastiCacheClusterRedis.PrimaryEndPoint.Address, !GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Address ]
