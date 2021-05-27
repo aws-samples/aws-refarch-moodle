@@ -898,6 +898,16 @@ Resources:
         Vpc:
           !GetAtt [ vpc, Outputs.Vpc ]
       TemplateURL: !Sub '${DeploymentLocation}/02-securitygroups.yaml'
+  
+  s3:
+    DependsOn: securitygroups
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        S3BucketName:
+          !Sub '${AWS::StackName}'
+      TemplateURL: !Sub '${DeploymentLocation}/03-s3.yaml'
+
   bastion:
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
@@ -1132,7 +1142,7 @@ Resources:
         DomainName:
           !Ref DomainName
       TemplateURL: !Sub '${DeploymentLocation}/05-route53.yaml'
-      
+
 Outputs:
   DnsName:
     Description: DNS name of the new load balancer for Moodle.
