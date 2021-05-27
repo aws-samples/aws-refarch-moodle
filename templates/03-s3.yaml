@@ -17,7 +17,6 @@ Metadata:
 
 Parameters:
   S3BucketName:
-    AllowedPattern: ^([a-zA-Z0-9]*)$
     Description: The S3 Bucket name.
     Type: String
 
@@ -26,3 +25,7 @@ Resources:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: !Ref S3BucketName
+
+Outputs:
+  BucketName:
+    Value: !Ref S3Bucket    
