@@ -1,0 +1,35 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference Architecture to host Moodle on AWS - Creates AWS CodeCommit repository
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: CodeCommit Parameters
+      Parameters:
+        - RepoName
+    ParameterLabels:
+      S3BucketName:
+        default: CodeCommit Repo Name
+
+Parameters:
+  RepoName:
+    Description: The CodeCommit repo name.
+    Type: String
+
+Resources:
+  MoodleRepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Ref RepoName
+      RepositoryDescription: This is a repository for my project with code from MySourceCodeBucket.
+
+Outputs:
+  ReporArn:
+    Value: !GetAtt MoodleRepo.Arn
+  RepoHTTP:
+    Value: !GetAtt MoodleRepo.CloneUrlHttp
+  RepoName:
+    Value: !GetAtt MoodleRepo.Name

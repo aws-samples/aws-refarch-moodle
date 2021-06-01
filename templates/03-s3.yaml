@@ -4,7 +4,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Reference Architecture to host Moodle on AWS - Creates S3 artifact bucket
 
 Metadata:
-
   AWS::CloudFormation::Interface:
     ParameterGroups:
     - Label:
@@ -28,4 +27,4 @@ Resources:
 
 Outputs:
   BucketName:
-    Value: !Ref S3Bucket    
+    Value: !Ref S3Bucket
