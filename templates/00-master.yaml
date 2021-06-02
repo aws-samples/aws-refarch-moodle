@@ -909,7 +909,7 @@ Resources:
       TemplateURL: !Sub '${DeploymentLocation}/03-s3.yaml'
 
   codecommit:
-    DependsOn: s3
+    DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
@@ -998,6 +998,10 @@ Resources:
           !Ref EfsPerformanceMode
         Subnet:
           !GetAtt [ vpc, Outputs.DataSubnet ]
+        RepoHTTP:
+          !GetAtt [ codecommit, Outputs.CloneUrlHttp ]
+        RepoArn:
+          !GetAtt [ codecommit, Outputs.CloneUrlArn ]
       TemplateURL: !Sub '${DeploymentLocation}/03-efsfilesystem.yaml'
   sessioncache:
     Condition: DeployWithSessionCache
