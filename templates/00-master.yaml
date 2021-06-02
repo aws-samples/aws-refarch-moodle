@@ -908,7 +908,7 @@ Resources:
           !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-s3.yaml'
 
-codecommit:
+  codecommit:
     DependsOn: s3
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -916,7 +916,6 @@ codecommit:
         RepoName:
           !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-codecommit.yaml'
-
 
   bastion:
     DependsOn: securitygroups
