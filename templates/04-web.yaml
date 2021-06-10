@@ -471,6 +471,7 @@ Resources:
             - install_logs
             - install_webserver
             - install_moodle
+            - install_codedeploy
             - install_cacheclient
             - install_opcache
             - start_webserver
@@ -657,20 +658,26 @@ Resources:
               mode: '000755'
               owner: root
               group: root
-            
             /tmp/install_moodle.sh:
               content:  !Sub |
                 #!/bin/bash -xe
-                wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable38/moodle-3.8.3.tgz
-                tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /var/www/moodle/html/
-                wget -O /var/www/moodle/html/lib/aws.phar https://docs.aws.amazon.com/aws-sdk-php/v3/download/aws.phar
-                cp /tmp/config.php /var/www/moodle/html/config.php
+                mkdir /var/www/moodle/html
+                mkdir /var/www/moodle/local
                 chown -R root:apache /var/www/moodle/html
                 chown -R apache:apache /var/www/moodle/local
-                
+                cp /tmp/status.txt /var/www/moodle/html/status.txt
+
               mode: 000500
               owner: root
               group: root
+
+            /tmp/status.txt:
+              content: !Sub |
+                  Health Check
+
+              mode: '000644'
+              owner: root
+              group: root              
           commands:
             install_moodle:
               command: ./install_moodle.sh
@@ -740,6 +747,26 @@ Resources:
               command: ./install_opcache.sh
               cwd: /tmp
               ignoreErrors: false
+        install_codedeploy:
+          files:
+            /tmp/install_codedeploy.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  
+                  cd /home/ec2-user
+                  wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
+                  chmod +x ./install
+                  ./install auto
+
+              mode: 000500
+              owner: root
+              group: root
+          commands:
+            install_codedeploy:
+              command: ./install_codedeploy.sh
+              cwd: /tmp
+              ignoreErrors: false              
         start_webserver:
           services:
             sysvinit:

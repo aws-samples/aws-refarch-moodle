@@ -11,7 +11,7 @@ Metadata:
       Parameters:
         - RepoName
     ParameterLabels:
-      S3BucketName:
+      RepoName:
         default: CodeCommit Repo Name
 
 Parameters:
@@ -27,7 +27,7 @@ Resources:
       RepositoryDescription: This is a repository for my project with code from MySourceCodeBucket.
 
 Outputs:
-  ReporArn:
+  RepoArn:
     Value: !GetAtt MoodleRepo.Arn
   RepoHTTP:
     Value: !GetAtt MoodleRepo.CloneUrlHttp

@@ -20,7 +20,7 @@ Metadata:
         - SecurityGroup
         - NumberOfSubnets
         - Subnet
-        - RepoHttp
+        - RepoHTTP
         - RepoArn
     ParameterLabels:
       EncrpytedBoolean:
@@ -41,10 +41,7 @@ Metadata:
         default: EFS Security Group
       Subnet:
         default: Subnets
-      RepoHttp:
-        default: RepoHttp
-      RepoArn:
-        default: RepoArn
+
 Parameters:
 
   EncrpytedBoolean:
@@ -162,7 +159,7 @@ Parameters:
   LatestAmiId:
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-  RepoHttp:
+  RepoHTTP:
     Description: CodeCommit repository HTTP URL.
     Type: String
   RepoArn:
@@ -376,27 +373,27 @@ Resources:
           files:              
             /tmp/moodle-git-config.sh:
               content: !Sub |
-                #!/bin/bash -x
+                  #!/bin/bash -x
 
-                git config --global user.name 'AWS User'
-                git config --global user.email noreply@amazon.com
+                  git config --global user.name 'AWS User'
+                  git config --global user.email noreply@amazon.com
 
-                git config --global credential.helper '!aws codecommit credential-helper $@'
-                git config --global credential.UseHttpPath true
+                  git config --global credential.helper '!aws codecommit credential-helper $@'
+                  git config --global credential.UseHttpPath true
 
-                mkdir /tmp/moodle
-                wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable311/moodle-3.11.tgz
-                tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /tmp/moodle/
-                cd /tmp/moodle
-                git init
-                git checkout -b main
-                git add .
-                git commit -m "CloudFormation deployment commit."
-                git remote add origin https://git-codecommit.us-east-1.amazonaws.com/v1/repos/Moodle-CodeCommit2
-                git remote -v
-                git push -u origin main
+                  mkdir /tmp/moodle
+                  wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable311/moodle-3.11.tgz
+                  tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /tmp/moodle/
+                  cd /tmp/moodle
+                  git init
+                  git checkout -b main
+                  git add .
+                  git commit -m "CloudFormation deployment commit."
+                  git remote add origin ${RepoHTTP}
+                  git remote -v
+                  git push -u origin main
 
-              mode: 000777
+              mode: '000755'
               owner: root
               group: root
         efs-add-storage:
@@ -481,7 +478,7 @@ Resources:
                 done
 
                 # set ASG to zero which terminates instance
-                aws autoscaling update-auto-scaling-group --auto-scaling-group-name $asg_name --desired-capacity 0 --region $region
+                # aws autoscaling update-auto-scaling-group --auto-scaling-group-name $asg_name --desired-capacity 0 --region $region
 
               mode: 000777
               owner: root
@@ -512,10 +509,11 @@ Resources:
             "- yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm\n",
             "- yum-config-manager --enable epel\n",
             "- yum install -y git\n",
-            "- yum install -y parallel",
+            "- yum install -y parallel\n",
             "- ntpstat\n",
             "- /opt/aws/bin/cfn-init --configsets moodle_git_config --verbose --stack ", !Ref 'AWS::StackName', " --resource LaunchConfiguration --region ", !Ref 'AWS::Region',"\n",
             "- /opt/aws/bin/cfn-init --configsets efs_add_storage --verbose --stack ", !Ref 'AWS::StackName', " --resource LaunchConfiguration --region ", !Ref 'AWS::Region',"\n",
+            "- sudo -H -u ec2-user /tmp/moodle-git-config.sh\n",
             "- /tmp/efs-add-storage.sh ", !Ref ElasticFileSystem, " throughput_data ", !Ref Growth,"\n",
             "- /opt/aws/bin/cfn-signal -e $? --stack ", !Ref 'AWS::StackName', " --resource AutoScalingGroup --region ", !Ref 'AWS::Region',"\n"
             ]

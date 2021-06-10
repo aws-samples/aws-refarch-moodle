@@ -976,7 +976,7 @@ Resources:
           !Ref NumberOfAZs
       TemplateURL: !Sub '${DeploymentLocation}/03-rds.yaml'
   efsfilesystem:
-    DependsOn: securitygroups
+    DependsOn: codecommit
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
@@ -999,9 +999,9 @@ Resources:
         Subnet:
           !GetAtt [ vpc, Outputs.DataSubnet ]
         RepoHTTP:
-          !GetAtt [ codecommit, Outputs.CloneUrlHttp ]
+          !GetAtt [ codecommit, Outputs.RepoHTTP ]
         RepoArn:
-          !GetAtt [ codecommit, Outputs.CloneUrlArn ]
+          !GetAtt [ codecommit, Outputs.RepoArn ]
       TemplateURL: !Sub '${DeploymentLocation}/03-efsfilesystem.yaml'
   sessioncache:
     Condition: DeployWithSessionCache

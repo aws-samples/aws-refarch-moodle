@@ -149,7 +149,7 @@ Resources:
           ]
       LoadBalancerAttributes:
       - Key: idle_timeout.timeout_seconds
-        Value: 60
+        Value: '60'
       SecurityGroups:
       - !Ref PublicAlbSecurityGroup
       Tags:
@@ -159,7 +159,7 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /README.txt
+      HealthCheckPath: /status.txt
       HealthCheckTimeoutSeconds: 5
       Name: !Join [ '', [ 'PublicALB-', !Ref Vpc ] ]
       Port: 80
