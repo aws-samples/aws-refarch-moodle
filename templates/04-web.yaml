@@ -661,10 +661,10 @@ Resources:
             /tmp/install_moodle.sh:
               content:  !Sub |
                 #!/bin/bash -xe
-                mkdir /var/www/moodle/html
-                mkdir /var/www/moodle/local
-                chown -R root:apache /var/www/moodle/html
-                chown -R apache:apache /var/www/moodle/local
+                #mkdir /var/www/moodle/html
+                #mkdir /var/www/moodle/local
+                #chown -R root:apache /var/www/moodle/html
+                #chown -R apache:apache /var/www/moodle/local
                 cp /tmp/status.txt /var/www/moodle/html/status.txt
 
               mode: 000500
@@ -707,7 +707,7 @@ Resources:
                   echo 'extension=igbinary.so;' >> /etc/php.d/50-memcached.ini
                   
                   #update Moodle source to use DYNAMIC_CLIENT_MODE so Moodle can detect changes to the elasticache cluster membership
-                  sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
+                  #sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
                   
               mode: 000500
               owner: root
@@ -748,6 +748,9 @@ Resources:
               cwd: /tmp
               ignoreErrors: false
         install_codedeploy:
+          packages:
+            yum:
+              ruby: []
           files:
             /tmp/install_codedeploy.sh:
               content:
