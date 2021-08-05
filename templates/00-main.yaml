@@ -1040,6 +1040,38 @@ Resources:
           !Ref DomainName
       TemplateURL: !Sub '${DeploymentLocation}/05-route53.yaml'
 
+  paramdatabasetype:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: MoodleDBType
+      Description: Moodle Aurora Database Type
+      Tier: Standard
+      Type: String
+      Value: !Ref DatabaseType
+  paramdatabasewriterdns:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: MoodleDBWriterDNS
+      Description: Moodle Aurora Database Writer DNS 
+      Tier: Standard
+      Type: String
+      Value: !Ref rds.Outputs.DatabaseClusterEndpointAddress
+  paramdatabasereaderdns:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: MoodleDBReaderDNS
+      Description: Moodle Aurora Database Reader DNS 
+      Tier: Standard
+      Type: String
+      Value: !Ref rds.Outputs.DatabaseClusterReadEndpointAddress
+  paramdatabaseport:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: MoodleDBPort
+      Description: Moodle Aurora Database Port Number 
+      Tier: Standard
+      Type: String
+      Value: !Ref rds.Outputs.DatabaseClusterEndpointPort      
 Outputs:
   DnsName:
     Description: DNS name of the new load balancer for Moodle.
