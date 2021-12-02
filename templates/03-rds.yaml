@@ -151,7 +151,7 @@ Resources:
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DataSubnetGroup
       Engine: aurora-postgresql
-      DBClusterParameterGroupName: default.aurora-postgresql11
+      DBClusterParameterGroupName: default.aurora-postgresql12
       KmsKeyId:
         !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref MyRDSInstanceSecretArn, ':SecretString:username}}' ]]
