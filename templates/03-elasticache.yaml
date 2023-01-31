@@ -4,18 +4,23 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Reference Architecture to host Moodle on AWS - Creates ElastiCache cache cluster
 
 Metadata:
-
   AWS::CloudFormation::Interface:
     ParameterGroups:
     - Label:
         default: Cache Parameters
       Parameters:
+        - CacheUsageType
+        - CacheEngineType
         - ElastiCacheNodeType
         - ElastiCacheClusterName
         - ElastiCacheSecurityGroup
         - NumberOfSubnets
         - Subnet
     ParameterLabels:
+      CacheEngineType:
+        default: Cache Engine Type
+      CacheUsageType:
+        default: Cache Usage Type
       ElastiCacheClusterName:
         default: Cache Cluster Name
       ElastiCacheNodeType:
@@ -28,101 +33,107 @@ Metadata:
         default: Subnets
 
 Parameters:
-
+  CacheEngineType:
+    AllowedValues:
+      - Redis
+      - Memcached
+    Default: Memcached
+    Description: Indicates whether to use ElastiCache Memcached or Redis. 
+    Type: String
+  CacheUsageType:
+    AllowedValues:
+      - application
+      - session
+    Default: session
+    Description: Indicates whether to use ElastiCache for session or application caching. 
+    Type: String
   ElastiCacheClusterName:
     AllowedPattern: ^([a-zA-Z0-9]*)$
-    Description: The ElastiCache cluster name. Defaults to the Amazon RDS database name.
+    Description: ElastiCache cluster name.
     Type: String
   ElastiCacheNodeType:
     AllowedValues:
-      - cache.t2.micro
-      - cache.t2.small
-      - cache.t2.medium
-      - cache.m3.medium
-      - cache.m3.large
-      - cache.m3.xlarge
-      - cache.m3.2xlarge
-      - cache.m4.large
-      - cache.m4.xlarge
-      - cache.m4.2xlarge
-      - cache.m4.4xlarge
-      - cache.m4.10xlarge
-      - cache.r3.large
-      - cache.r3.xlarge
-      - cache.r3.2xlarge
-      - cache.r3.4xlarge
-      - cache.r3.8xlarge
-      - cache.r4.large
-      - cache.r4.xlarge
-      - cache.r4.2xlarge
-      - cache.r4.4xlarge
-      - cache.r4.8xlarge
-      - cache.r4.16xlarge
+      - cache.t3.micro
+      - cache.t3.small
+      - cache.t3.medium
+      - cache.m5.large
+      - cache.m5.xlarge
+      - cache.m5.2xlarge
+      - cache.m5.4xlarge
+      - cache.m5.12xlarge
+      - cache.m5.24xlarge
+      - cache.m6g.large
+      - cache.m6g.xlarge
+      - cache.m6g.2xlarge
+      - cache.m6g.4xlarge
+      - cache.m6g.8xlarge
+      - cache.m6g.12xlarge
+      - cache.m6g.16xlarge
     ConstraintDescription: Must be a valid Amazon ElastiCache node type.
-    Default: cache.t2.medium
-    Description: The Amazon ElastiCache cluster node type.
+    Default: cache.m6g.large
+    Description: ElastiCache cluster node type.
     Type: String
   ElastiCacheSecurityGroup:
     Description: Select the ElastiCache security group.
     Type: AWS::EC2::SecurityGroup::Id
   NumberOfSubnets:
     AllowedValues:
+    - 1
     - 2
     - 3
-    - 4
-    - 5
-    - 6
-    Default: 3
+    Default: 2
     Description: Number of subnets. This must match your selections in the list of subnets below.
     Type: String 
   Subnet:
     Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
     Type: List<AWS::EC2::Subnet::Id>
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: Moodle Project Name
+    Type: String
 
 Conditions:
-
+  UseRedis:
+    !Equals [!Ref CacheEngineType, Redis]
+  UseMemcached:
+    !Equals [!Ref CacheEngineType, Memcached]
   NumberOfSubnets1:
       !Equals [ 1, !Ref NumberOfSubnets ]
   NumberOfSubnets2:
       !Equals [ 2, !Ref NumberOfSubnets ]
   NumberOfSubnets3:
       !Equals [ 3, !Ref NumberOfSubnets ]
-  NumberOfSubnets4:
-      !Equals [ 4, !Ref NumberOfSubnets ]
-  NumberOfSubnets5:
-      !Equals [ 5, !Ref NumberOfSubnets ]
-  NumberOfSubnets6:
-      !Equals [ 6, !Ref NumberOfSubnets ]
   Subnet0: !Or
     - !Condition NumberOfSubnets1
     - !Condition NumberOfSubnets2
     - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
   Subnet1: !Or
     - !Condition NumberOfSubnets2
     - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet2: !Or
-    - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet3: !Or
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet4: !Or
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet5: !Condition NumberOfSubnets6
+  Subnet2: !Condition NumberOfSubnets3
 
 Resources:
+  ElastiCacheClusterRedis:
+    Condition: UseRedis
+    Type: AWS::ElastiCache::ReplicationGroup
+    Properties:
+      ReplicationGroupId: !Ref ElastiCacheClusterName
+      ReplicationGroupDescription: !Ref ElastiCacheClusterName
+      AtRestEncryptionEnabled: true
+      TransitEncryptionEnabled: false
+      AutoMinorVersionUpgrade: true
+      MultiAZEnabled: true
+      CacheNodeType: !Ref ElastiCacheNodeType
+      CacheSubnetGroupName: !Ref ElastiCacheSubnetGroup
+      SecurityGroupIds:
+        - !Ref ElastiCacheSecurityGroup
+      Engine: redis
+      NumCacheClusters:
+        !Ref NumberOfSubnets
 
-  ElastiCacheCluster:
+  ElastiCacheClusterMemcached:
+    Condition: UseMemcached
     Type: AWS::ElastiCache::CacheCluster
     Properties:
       AZMode: cross-az
@@ -136,7 +147,8 @@ Resources:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
       VpcSecurityGroupIds:
-      - !Ref ElastiCacheSecurityGroup       
+      - !Ref ElastiCacheSecurityGroup      
+ 
   ElastiCacheSubnetGroup: 
     Type: AWS::ElastiCache::SubnetGroup
     Properties: 
@@ -149,21 +161,33 @@ Resources:
           !If
             [ NumberOfSubnets2,
             [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
-            !If
-              [ NumberOfSubnets3,
-              [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ],
-              !If
-                [ NumberOfSubnets4,
-                [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ] ],
-                !If
-                  [ NumberOfSubnets5,
-                  [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ], !Select [ 4, !Ref Subnet ] ],
-                  [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ], !Select [ 4, !Ref Subnet ], !Select [ 5, !Ref Subnet ] ]
-                  ]
-                ]
-              ]
+            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ]
             ]
           ]
+
+  ElastiCacheClusterEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/Cache/', !Ref CacheUsageType, '/ElastiCacheClusterEndpoint' ] ]
+      Type: String
+      Value: !If [UseRedis, 
+                  !Join [ ':', [!GetAtt ElastiCacheClusterRedis.PrimaryEndPoint.Address, !GetAtt ElastiCacheClusterRedis.PrimaryEndPoint.Port]],
+                  !Join [ ':', [!GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Address, !GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Port]] 
+                 ]
+      Description: SSM Parameter for ElastiCache Cluster Endpoint
+
+  ElastiCacheEngine:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/Cache/', !Ref CacheUsageType, '/Engine' ] ]
+      Type: String
+      Value: !Ref CacheEngineType
+      Description: SSM Parameter for ElastiCache Engine Type
+
 Outputs:
   ElastiCacheClusterEndpointAddress:
-    Value: !GetAtt ElastiCacheCluster.ConfigurationEndpoint.Address
+    Value: !If [UseRedis, 
+                  !Join [ ':', [!GetAtt ElastiCacheClusterRedis.PrimaryEndPoint.Address, !GetAtt ElastiCacheClusterRedis.PrimaryEndPoint.Port]],
+                  !Join [ ':', [!GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Address, !GetAtt ElastiCacheClusterMemcached.ConfigurationEndpoint.Port]] 
+                 ]
+      

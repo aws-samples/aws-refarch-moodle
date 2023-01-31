@@ -1,0 +1,28 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Reference Architecture to host Moodle on AWS - Creates CodePiple and CodeDeploy
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+    - Label:
+        default: S3 Parameters
+      Parameters:
+        - S3BucketName
+    ParameterLabels:
+      S3BucketName:
+        default: S3 Bucket Name
+
+Parameters:
+  S3BucketName:
+    Description: The S3 Bucket name.
+    Type: String
+
+Resources:
+  S3Bucket:
+      Type: AWS::S3::Bucket
+
+Outputs:
+  BucketName:
+    Value: !Ref S3Bucket

@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 
-Description: Reference Architecture to host Moodle on AWS - Creates RDS Aurora MySQL or PostgreSQL database cluster
+Description: Reference Architecture to host Moodle on AWS - Creates RDS Aurora Serverless v2 MySQL or PostgreSQL database
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -10,9 +10,8 @@ Metadata:
         default: Database Parameters
       Parameters:
         - DatabaseType
-        - DatabaseInstanceType
-        # - DatabaseMasterUsername
-        # - DatabaseMasterPassword
+        - DatabaseMinCapacity
+        - DatabaseMaxCapacity
         - DatabaseName
         - DatabaseEncryptedBoolean
         - DatabaseCmk
@@ -22,16 +21,14 @@ Metadata:
     ParameterLabels:
       DatabaseType:
         default: Aurora database type
+      DatabaseMinCapacity:
+        default: Minimum capacity for database
+      DatabaseMaxCapacity:
+        default: Maximum capacity for database
       DatabaseEncryptedBoolean:
         default: Encrypted DB Cluster
       DatabaseCmk:
         default: AWS KMS Customer Master Key (CMK) to encrypt DB 
-      DatabaseInstanceType:
-        default: DB Instance Class 
-      # DatabaseMasterUsername:
-      #   default: DB Master Username
-      # DatabaseMasterPassword:
-      #   default: DB Master Password
       DatabaseName:
         default: DB Name
       DatabaseSecurityGroup:
@@ -59,28 +56,6 @@ Parameters:
   DatabaseCmk:
     Description: AWS KMS Customer Master Key (CMK) to encrypt database cluster
     Type: String
-  DatabaseInstanceType:
-    AllowedValues:
-      - db.t3.medium
-      - db.t3.large
-      - db.r5.large
-      - db.r5.xlarge
-      - db.r5.2xlarge
-      - db.r5.4xlarge
-      - db.r5.8xlarge
-      - db.r5.12xlarge
-      - db.r5.16xlarge
-      - db.r6g.large
-      - db.r6g.xlarge
-      - db.r6g.2xlarge
-      - db.r6g.4xlarge
-      - db.r6g.8xlarge
-      - db.r6g.12xlarge
-      - db.r6g.16xlarge
-    ConstraintDescription: Must be a valid Aurora RDS instance type.
-    Default: db.r6g.large
-    Description: Amazon Aurora RDS database instance type
-    Type: String
   RDSInstanceSecretArn:
     Type: String
   DatabaseName:
@@ -105,6 +80,34 @@ Parameters:
     AllowedPattern: ^([a-zA-Z0-9]*)$
     Default: App
     Description: Moodle Project Name
+    Type: String
+  DatabaseMinCapacity:
+    AllowedValues:
+      - 0.5
+      - 1
+      - 2
+      - 4
+      - 5
+      - 16
+      - 32
+      - 64
+      - 128
+    Default: 0.5
+    Description: The minimum capacity for an Aurora DB cluster, starts with 0.5 and maximum up to 1
+    Type: String
+  DatabaseMaxCapacity:
+    AllowedValues:
+      - 0.5
+      - 1
+      - 2
+      - 4
+      - 5
+      - 16
+      - 32
+      - 64
+      - 128
+    Default: 64
+    Description: The maximum capacity for an Aurora DB cluster, starts with 0.5 and maximum up to 1
     Type: String
 
 Conditions:
@@ -154,6 +157,10 @@ Resources:
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
       VpcSecurityGroupIds:
       - !Ref DatabaseSecurityGroup
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: !Ref DatabaseMinCapacity
+        MaxCapacity: !Ref DatabaseMaxCapacity
+
   DatabaseInstance0:
     Type: AWS::RDS::DBInstance
     DeletionPolicy: Delete
@@ -161,27 +168,14 @@ Resources:
       AllowMajorVersionUpgrade: false
       AutoMinorVersionUpgrade: true
       DBClusterIdentifier: !Ref DatabaseCluster
-      DBInstanceClass: !Ref DatabaseInstanceType
+      DBInstanceClass: 'db.serverless'
       DBSubnetGroupName: !Ref DataSubnetGroup
       Engine:
         !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
-  DatabaseInstance1:
-    Type: AWS::RDS::DBInstance
-    DeletionPolicy: Delete
-    Properties:
-      AllowMajorVersionUpgrade: false
-      AutoMinorVersionUpgrade: true
-      DBClusterIdentifier: !Ref DatabaseCluster
-      DBInstanceClass: !Ref DatabaseInstanceType
-      DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine:
-        !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
-      Tags:
-        - Key: Name
-          Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
+
   DataSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -199,6 +193,7 @@ Resources:
       Tags:
         - Key: Name
           Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
+
   DatabaseClusterParam:
     Type: AWS::SSM::Parameter
     Properties:
@@ -212,7 +207,8 @@ Resources:
     Properties:
       Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/DB/ClusterReadOnlyEndpoint' ] ]
       Type: String
-      Value: !GetAtt DatabaseCluster.ReadEndpoint.Address
+      # Aurora Serverless v1 does not support Read-only replicas
+      Value: !GetAtt DatabaseCluster.Endpoint.Address
       Description: SSM Parameter for Moodle DB Cluster Read only
 
   DatabaseNameParam:
@@ -236,10 +232,6 @@ Outputs:
     Value: !Ref DatabaseCluster
   DatabaseName:
     Value: !Ref DatabaseName
-  DatabaseInstance0:
-    Value: !Ref DatabaseInstance0
-  DatabaseInstance1:
-    Value: !Ref DatabaseInstance1
   DataSubnetGroup:
     Value: !Ref DataSubnetGroup
   DatabaseClusterEndpointAddress:
@@ -248,4 +240,5 @@ Outputs:
     Value: !GetAtt DatabaseCluster.Endpoint.Port
   DatabaseClusterReadEndpointAddress:
     Value: !GetAtt DatabaseCluster.ReadEndpoint.Address  
+
 

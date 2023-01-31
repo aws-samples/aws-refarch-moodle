@@ -1,0 +1,176 @@
+Parameters: 
+  CodeCommitRepoName: 
+    Type: "String"
+    Default: "Moodle Repo"
+    Description: Moodle CodeCommit repo name
+  CodeCommitRepoArn: 
+    Type: "String"
+    Description: Moodle CodeCommit repo Arn
+  BranchName:
+    Type: "String"
+    Default: "main"
+    Description: repository's branch name
+  AppAutoScalingGroupName:
+    Type: "String"
+    Description: Name of Autoscaling group for Moodle Web app.
+  MoodleAppTargetGroupName:
+    Type: "String"
+    Description: Name of Target group attached to load balancer for web application servers.
+  CodeArtifactS3BucketName:
+    Type: "String"
+    Description: Code Artifact S3 Bucket Name
+  CodeArtifactS3BucketArn:
+    Type: "String"
+    Description: Code Artifact S3 Bucket ARN  
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: The Moodle Project Name
+    Type: String
+
+Resources:
+  # AWS CodePipeline to deploy source code from CodeCommit repo to autoscaling groups for Moodle Web apps.
+  
+  # This role is assumed by the CodePipeline service itself. 
+  MoodleCodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - codedeploy.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole'
+      Path: /
+      Policies:
+      - PolicyName: MoodleCodeDeployCustomPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+              - iam:PassRole
+              - ec2:CreateTags
+              - ec2:RunInstances
+            Resource:
+              - '*'
+
+  MoodleDeployApp:
+    Type: 'AWS::CodeDeploy::Application'
+    Properties:
+      ApplicationName: !Sub '${ProjectName}-DeployApp'
+
+  MoodleDeploymentGroup:
+    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    DependsOn: MoodleDeployApp
+    Properties:
+      ApplicationName: !Ref MoodleDeployApp
+      DeploymentGroupName: !Sub '${ProjectName}-AppDG'
+      ServiceRoleArn: !GetAtt MoodleCodeDeployServiceRole.Arn
+      DeploymentStyle:
+        DeploymentOption: BLUE_GREEN #IN_PLACE
+        DeploymentOption: WITH_TRAFFIC_CONTROL #WITHOUT_TRAFFIC_CONTROL
+      AutoScalingGroups: 
+        - !Ref AppAutoScalingGroupName
+      LoadBalancerInfo:
+        TargetGroupInfoList: 
+          - Name: !Ref MoodleAppTargetGroupName
+  
+  MoodleWebAppASGNameParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/Moodle/${ProjectName}/WebAppASGName'
+      Type: String
+      Value: !Ref AppAutoScalingGroupName
+      Description: SSM Parameter for Moodle WebApp Auto scaling group
+
+  #This role is for Moodle pipeline to perform ci-cd tasks.
+  # !TODO to limit this role from full access.
+  MoodlePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSCodePipeline_FullAccess'
+      Path: /
+      Policies:
+      - PolicyName: MoodlePipelineCustomPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - codedeploy:*
+            Resource:
+              - arn:aws:codedeploy:*:*:application:*
+              - arn:aws:codedeploy:*:*:deploymentgroup:*/*
+              - arn:aws:codedeploy:*:*:instance:*
+              - arn:aws:codedeploy:*:*:deploymentconfig:*
+          - Effect: Allow
+            Action:
+              - s3:*
+            Resource:
+              - !Ref CodeArtifactS3BucketArn
+              - !Join [ '', [ !Ref CodeArtifactS3BucketArn,'/*' ] ]
+          - Effect: Allow
+            Action:
+              - codecommit:*
+            Resource:
+              - !Ref CodeCommitRepoArn
+
+  # The CI/CD pipeline stitching the full mechanism together
+  MoodleAppPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${ProjectName}-Pipeline'
+      RoleArn: !GetAtt MoodlePipelineRole.Arn
+      Stages:
+        - Actions:
+            # Initiate Pipeline from CodeCommit
+            - ActionTypeId: 
+                Version: '1'
+                Provider: CodeCommit
+                Category: Source
+                Owner: AWS
+              OutputArtifacts:
+                - Name: source
+              InputArtifacts: []
+              Name: source
+              Configuration:
+                RepositoryName: !Ref CodeCommitRepoName
+                BranchName: !Ref BranchName
+                PollForSourceChanges: 'false'
+              RunOrder: 1
+              Namespace: SourceVars
+          Name: Initiate
+        - Actions:
+            # Creating CodeDeploy for Deploying Moodle codebase from CodeCommit repo
+            - ActionTypeId: 
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: "1"
+              InputArtifacts:
+                 - Name: source
+              Name: DeployOnASG
+              Configuration:
+                ApplicationName: !Ref MoodleDeployApp
+                DeploymentGroupName: !Ref MoodleDeploymentGroup
+              RunOrder: 1
+          Name: Deploy
+      ArtifactStore:
+        Location: !Ref CodeArtifactS3BucketName
+        Type: S3
+  

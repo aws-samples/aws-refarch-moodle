@@ -59,3 +59,24 @@ If you discover a potential security issue in this project we ask that you notif
 See the [LICENSE](https://github.com/aws-samples/aws-refarch-moodle/blob/master/LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
 
 We may ask you to sign a [Contributor License Agreement (CLA)](http://en.wikipedia.org/wiki/Contributor_License_Agreement) for larger changes.
+
+## Authors
+
+Names in alphabetical orders
+
+v1.0
+- Diego Magalhães
+- gamerf
+- Henri Yandell
+- jtrollin
+- MathieuJeandron
+- StephaniePar
+- Thiago Pádua
+
+v2.0
+- Irshad Chohan
+- Norman Owens
+- Preenesh Nayanasudhan
+- Stephen Smith
+- Vincent Rioux 
+

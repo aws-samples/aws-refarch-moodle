@@ -20,7 +20,7 @@ Metadata:
       DnsHostId:
         default: DNS Host Id
       DomainName:
-        default: Site Domain
+        default: Domain Name of the Moodle site
       HostedZoneName:
         default: Hosted Zone Name
 
@@ -28,11 +28,11 @@ Parameters:
 
   DnsEndpoint:
     AllowedPattern: ^(?!http)(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
-    Description: The DNS endpoint - CloudFront DNS if using CloudFront else Public ELB DNS name.
+    Description: The DNS endpoint - CloudFront DNS if using CloudFront else Public ALB DNS name.
     Type: String
   DnsHostId:
-    AllowedPattern: ^[A-Z0-9]{14}$
-    Description: The DNS host zone id - 'Z2FDTNDATAQYW2' if using CloudFront else Public ELB host zone id.
+    AllowedPattern: ^[A-Z0-9]+$
+    Description: The DNS host zone id - 'Z2FDTNDATAQYW2' if using CloudFront else Public ALB host zone id.
     Type: String
   HostedZoneName:
     AllowedPattern: ^(?!http)(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$

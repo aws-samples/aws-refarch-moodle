@@ -1,0 +1,806 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: This templates helps creating CodeCommit repo, S3 Bucket and update repo with Moodle code & configurations.
+
+Parameters:
+
+  EC2KeyName:
+    Description: Name of an existing EC2 key pair
+    Type: AWS::EC2::KeyPair::KeyName
+
+  PipelineSecurityGroup:
+    Description: Select the Pipeline security group Id
+    Type: AWS::EC2::SecurityGroup::Id  
+  
+  NumberOfSubnets:
+    AllowedValues:
+    - 1
+    - 2
+    - 3
+    Default: 2
+    Description: Number of subnets. This must match your selections in the list of Subnets below.
+    Type: String  
+  
+  PipelineSubnet:
+    Description: Select existing subnets.
+    Type: List<AWS::EC2::Subnet::Id>
+
+  InstanceType:
+    AllowedValues:
+      - m5.large 
+      - m5.xlarge 
+      - m5.2xlarge 
+      - m5.4xlarge 
+      - m5.8xlarge 
+      - m5.12xlarge
+      - m5.16xlarge
+      - m5.24xlarge      
+      - c5.large 
+      - c5.xlarge 
+      - c5.2xlarge 
+      - c5.4xlarge 
+      - c5.9xlarge 
+      - c5.12xlarge
+      - c5.18xlarge  
+      - c5.24xlarge      
+      - r5.large 
+      - r5.xlarge 
+      - r5.2xlarge 
+      - r5.4xlarge 
+      - r5.8xlarge 
+      - r5.12xlarge
+      - r5.16xlarge
+      - r5.24xlarge
+      - m5a.large 
+      - m5a.xlarge 
+      - m5a.2xlarge 
+      - m5a.4xlarge 
+      - m5a.8xlarge 
+      - m5a.12xlarge
+      - m5a.16xlarge
+      - m5a.24xlarge      
+      - c5a.large 
+      - c5a.xlarge 
+      - c5a.2xlarge 
+      - c5a.4xlarge 
+      - c5a.9xlarge 
+      - c5a.12xlarge
+      - c5a.18xlarge  
+      - c5a.24xlarge      
+      - r5a.large 
+      - r5a.xlarge 
+      - r5a.2xlarge 
+      - r5a.4xlarge 
+      - r5a.8xlarge 
+      - r5a.12xlarge
+      - r5a.16xlarge
+      - r5a.24xlarge
+      - m6g.large 
+      - m6g.xlarge 
+      - m6g.2xlarge 
+      - m6g.4xlarge 
+      - m6g.8xlarge 
+      - m6g.12xlarge
+      - m6g.16xlarge
+      - m6g.24xlarge      
+      - c6g.large 
+      - c6g.xlarge 
+      - c6g.2xlarge 
+      - c6g.4xlarge 
+      - c6g.9xlarge 
+      - c6g.12xlarge
+      - c6g.18xlarge  
+      - c6g.24xlarge      
+      - r6g.large 
+      - r6g.xlarge 
+      - r6g.2xlarge 
+      - r6g.4xlarge 
+      - r6g.8xlarge 
+      - r6g.12xlarge
+      - r6g.16xlarge
+      - r6g.24xlarge
+    ConstraintDescription: Must be a valid Amazon EC2 instance type.
+    Default: m6g.large
+    Description: The Amazon EC2 instance type that dynamically adjusts thresholds based on permitted throughput changes.
+    Type: String
+  
+  LatestAmiId:
+    Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  LatestArmAmiId :
+    Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
+  
+  MoodleLocale:
+    Description: "The main language of the Moodle site, during initial configuration."
+    Type: String
+    Default: en
+  
+  DomainName:
+    Description: '[ Optional ] The main domain name of the Moodle site (e.g. moodle.example.edu).'
+    Type: String
+  
+  RDSInstanceSecretArn:
+    Description: 'Credentials for Moodle RDS instance'
+    Type: String
+    Default: ""
+
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: The Moodle Project Name
+    Type: String
+
+  WebAsgMax:
+    AllowedPattern: ^((?!0$)[1-2]?[0-9]|30)$
+    ConstraintDescription: Must be a number between 1 and 30.
+    Default: 1
+    Description: Specifies the maximum number of EC2 instances in the Web Autoscaling Group.
+    Type: String
+  WebAsgMin:
+    AllowedPattern: ^([0-0]?[0-9]|10)$
+    ConstraintDescription: Must be a number between 0 and 10.
+    Default: 2
+    Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
+    Type: String
+
+Conditions:
+  NumberOfSubnets1:
+      !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2:
+      !Equals [ 2, !Ref NumberOfSubnets ]
+  NumberOfSubnets3:
+      !Equals [ 3, !Ref NumberOfSubnets ]
+  Subnet0: !Or
+    - !Condition NumberOfSubnets1
+    - !Condition NumberOfSubnets2
+    - !Condition NumberOfSubnets3
+  Subnet1: !Or
+    - !Condition NumberOfSubnets2
+    - !Condition NumberOfSubnets3
+  Subnet2: !Condition NumberOfSubnets3
+  UsingGraviton2Ami:  !Or
+    - !Equals ["t4",!Select [0, !Split [ "g.", !Ref InstanceType]]]
+    - !Equals ["c6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
+    - !Equals ["m6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
+    - !Equals ["r6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
+
+Resources:
+  MoodleRepo:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryName: !Sub '${ProjectName}-Repo'
+      RepositoryDescription: This is Moodle CodeCommit repository.
+
+  #This bucket is being used for storing Code artifacts for deployment.
+  CodeArtifactS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Join ['-', [!Sub 'moodle-code', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+      - !Ref InstanceRole
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
+      Path: /
+      Policies:
+      - PolicyName: MoodlePipelineHelperPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+              - autoscaling:DescribeAutoScalingGroups
+              - autoscaling:DescribeAutoScalingInstances
+              - autoscaling:DescribePolicies
+              - autoscaling:UpdateAutoScalingGroup
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - codepipeline:StartPipelineExecution
+            Resource: 
+             !Sub  'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${ProjectName}-Pipeline'
+          - Effect: Allow
+            Action:
+              - codecommit:GitPush
+            Resource: !GetAtt MoodleRepo.Arn
+
+  PipelineHelperASGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      Cooldown: 60
+      HealthCheckGracePeriod: 120
+      HealthCheckType: EC2
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PipelineHelperLaunchTemplate
+        Version: !GetAtt PipelineHelperLaunchTemplate.LatestVersionNumber
+      MaxSize: 1
+      MinSize: 0
+      DesiredCapacity: 1
+      Tags:
+        - Key: Name
+          Value: !Join [ '', [ 'Moodle Pipeline Helper ', !GetAtt MoodleRepo.Name, ' ...will auto terminate' ] ]
+          PropagateAtLaunch: true
+      VPCZoneIdentifier:
+        !If
+          [ NumberOfSubnets1,
+          [ !Select [ 0, !Ref PipelineSubnet ] ],
+          !If
+            [ NumberOfSubnets2,
+            [ !Select [ 0, !Ref PipelineSubnet ], !Select [ 1, !Ref PipelineSubnet ] ],
+            [ !Select [ 0, !Ref PipelineSubnet ], !Select [ 1, !Ref PipelineSubnet ], !Select [ 2, !Ref PipelineSubnet ] ]
+            ]
+          ]
+    CreationPolicy:
+      ResourceSignal:
+        Count: 0
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingReplacingUpdate:
+        WillReplace: true
+
+  PipelineHelperLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Metadata:  
+      AWS::CloudFormation::Init:
+        configSets:
+          moodle_git_config:
+            - moodle-git-config
+        moodle-git-config:
+          packages:
+            yum:
+              git: []
+          files:           
+            /tmp/appspec.yml:
+              content: !Sub |
+                version: 0.0
+                os: linux
+                files:
+                  - source: /
+                    destination: /var/www/moodle/html/
+                hooks:
+                  ApplicationStop:
+                    - location: .pipeline/stop_application.sh
+                      timeout: 300
+                  BeforeInstall:
+                    - location: .pipeline/before_install.sh
+                      timeout: 600
+                  AfterInstall:
+                    - location: .pipeline/after_install.sh
+                      timeout: 300
+                  ApplicationStart:
+                    - location: .pipeline/start_application.sh
+                      timeout: 300
+                  ValidateService:
+                    - location: .pipeline/basic_health_check.sh
+                      timeout: 300
+              mode: '000755'
+              owner: root
+              group: root
+            /tmp/start_application.sh:
+              content: !Sub |
+                #!/bin/bash
+                sudo systemctl start php-fpm
+                sudo systemctl start httpd
+                
+              mode: '000755'
+              owner: root
+              group: root
+            /tmp/stop_application.sh:
+              content: !Sub |
+                #!/bin/bash
+                sudo systemctl stop httpd
+                sudo systemctl stop php-fpm
+              mode: '000755'
+              owner: root
+              group: root
+            /tmp/basic_health_check.sh:
+              content: !Sub |
+                #!/bin/bash
+                for i in `seq 1 10`;
+                do
+                  HTTP_CODE=`curl --write-out '%{http_code}' -o /dev/null -m 10 -q -s http://localhost:80/status.txt`
+                  if [ "$HTTP_CODE" == "200" ]; then
+                    echo "Successfully pulled root page."
+                    exit 0;
+                  fi
+                  echo "Attempt to curl endpoint returned HTTP Code $HTTP_CODE. Backing off and retrying."
+                  sleep 10
+                done
+                echo "Server did not come up after expected time. Failing."
+                exit 1
+              mode: '000755'
+              owner: root
+              group: root
+            /tmp/config.php:
+              content: !Sub |
+                  <?php
+                  require 'lib/aws.phar';
+                  use Aws\SecretsManager\SecretsManagerClient;
+                  use Aws\Exception\AwsException;
+                  use Aws\Iam\IamClient;
+
+                  $client = new SecretsManagerClient([
+                      'version' => '2017-10-17',
+                      'region' => '${AWS::Region}',
+                  ]);
+
+                  $secretName = '${RDSInstanceSecretArn}';
+
+                  try {
+                      $result = $client->getSecretValue([
+                          'SecretId' => $secretName,
+                      ]);
+
+                  } catch (AwsException $e) {
+                      $error = $e->getAwsErrorCode();
+                  }
+                  // Decrypts secret using the associated KMS CMK.
+                  // Depending on whether the secret is a string or binary, one of these fields will be populated.
+                  if (isset($result['SecretString'])) {
+                      $secret = $result['SecretString'];
+                  } 
+                  $CFG = new stdClass;
+                  $CFG->getremoteaddrconf = 0;
+                  $CFG->dbtype = 'pgsql';
+                  $CFG->dblibrary = 'native';
+                  $CFG->dbhost = getenv('EnvDatabaseClusterEndpointAddress');
+                  $CFG->dbname = getenv('EnvDatabaseName');
+                  $CFG->dbuser = json_decode($secret)->{'username'};
+                  $CFG->dbpass = json_decode($secret)->{'password'};
+                  $CFG->prefix = 'mdl_';
+                  $CFG->lang = '${MoodleLocale}';
+                  $CFG->dboptions = array(
+                    'dbpersist' => false,
+                    'dbsocket' => false,
+                    'dbport' => '',
+                    'dbhandlesoptions' => false,
+                    'dbcollation' => 'utf8mb4_unicode_ci',
+                    'connecttimeout' => 300, 
+                    'readonly' => [         
+                      'instance' => 'db-cluster-readonly-endpoint',
+                      'connecttimeout' => 300, 
+                      'latency' => 2,    
+                      'exclude_tables' => [  
+                        'config',
+                      ],
+                    ]
+                  );
+
+                  // Hostname definition //
+                  $hostname = '${DomainName}';
+                  $hostwithprotocol = strtolower($hostname);
+
+                  if(substr($hostwithprotocol, 0, 4) === 'http'){} else {
+                    $hostwithprotocol = 'http://'.strtolower($hostwithprotocol);
+                  }
+                  
+                  $CFG->wwwroot = strtolower($hostwithprotocol);
+                  $CFG->sslproxy = (substr($hostwithprotocol,0,5)=='https' ? true : false);
+                  // Moodledata location //
+                  $CFG->dataroot = '/var/www/moodle/data';
+                  $CFG->tempdir = '/var/www/moodle/temp';
+                  $CFG->cachedir = '/var/www/moodle/cache';
+                  $CFG->localcachedir = '/var/www/moodle/local';
+                  $CFG->directorypermissions = 02777;
+                  $CFG->admin = 'admin';
+                  // Configure Session Cache
+                  $SessionsCacheType = 'Memcached';
+                  $SessionEndpoint = '';
+                  if ($SessionEndpoint != '') {
+                    
+                    $CFG->dbsessions = false;
+                      
+                    if($SessionsCacheType == 'Redis') {
+
+                      $CFG->session_handler_class = '\core\session\redis';
+                      $CFG->session_redis_host = $SessionEndpoint;
+                      $CFG->session_redis_port = 6379;                     // Optional.
+                      $CFG->session_redis_database = 0;                    // Optional, default is db 0.
+                      //$CFG->session_redis_auth = '';                       // Optional, default is don't set one.
+                      //$CFG->session_redis_prefix = '';                     // Optional, default is don't set one.
+                      $CFG->session_redis_acquire_lock_timeout = 120;      // Default is 2 minutes.
+                      $CFG->session_redis_acquire_lock_warn = 0;           // If set logs early warning if a lock has not been acquried.
+                      $CFG->session_redis_lock_expire = 7200;              // Optional, defaults to session timeout.
+                      $CFG->session_redis_lock_retry = 100;                // Optional wait between lock attempts in ms, default is 100.
+
+                      $CFG->session_redis_serializer_use_igbinary = false; // Optional, default is PHP builtin serializer.
+                      $CFG->session_redis_compressor = 'none';       
+                    } else {
+
+                      $CFG->session_handler_class = '\core\session\memcached';
+                      $CFG->session_memcached_save_path = $SessionEndpoint;
+                      $CFG->session_memcached_prefix = 'memc.sess.key.';
+                      $CFG->session_memcached_acquire_lock_timeout = 120;
+                      $CFG->session_memcached_lock_expire = 7100;
+                      $CFG->session_memcached_lock_retry_sleep = 150;
+                    }
+                  }
+                  //@error_reporting(E_ALL | E_STRICT);   // NOT FOR PRODUCTION SERVERS!
+                  //@ini_set('display_errors', '1');         // NOT FOR PRODUCTION SERVERS!
+                  //$CFG->debug = (E_ALL | E_STRICT);   // === DEBUG_DEVELOPER - NOT FOR PRODUCTION SERVERS!
+                  //$CFG->debugdisplay = 1; 
+                  require_once(__DIR__ . '/lib/setup.php');
+                  // END OF CONFIG //
+                  ?>
+              mode: '000755'
+              owner: root
+              group: root
+            
+            /tmp/after_install.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+
+                  # Setting up access ownership to apache:apache
+                  chown -R apache:apache /var/www/moodle/html 
+                  chown -R apache:apache /var/www/moodle/data
+                  chown -R apache:apache /var/www/moodle/cache
+                  chown -R apache:apache /var/www/moodle/temp
+                  chown -R apache:apache /var/www/moodle/local
+
+                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+                  region=${!availabilityzone:0:-1}
+
+                  export EnvDatabaseType=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/Type --query Parameters[0].Value)
+                  export EnvDatabaseType=`echo $EnvDatabaseType | sed -e 's/^"//' -e 's/"$//'`
+                  
+                  if [ "$EnvDatabaseType" == "MySQL" ]; then
+                    sed -i "s/\$CFG->dbtype = .*/\$CFG->dbtype = 'auroramysql';/" /var/www/moodle/html/config.php
+                  else
+                    sed -i "s/\$CFG->dbtype = .*/\$CFG->dbtype = 'pgsql';/" /var/www/moodle/html/config.php
+                  fi
+                  
+                  export EnvDatabaseName=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/Name --query Parameters[0].Value)
+                  export EnvDatabaseName=`echo $EnvDatabaseName | sed -e 's/^"//' -e 's/"$//'`
+                  sed -i "s/\$CFG->dbname.*/\$CFG->dbname = '"$EnvDatabaseName"';/" /var/www/moodle/html/config.php
+
+                  export EnvDatabaseClusterEndpointAddress=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/ClusterEndpoint --query Parameters[0].Value)
+                  export EnvDatabaseClusterEndpointAddress=`echo $EnvDatabaseClusterEndpointAddress | sed -e 's/^"//' -e 's/"$//'`
+                  sed -i "s/\$CFG->dbhost.*/\$CFG->dbhost = '"$EnvDatabaseClusterEndpointAddress"';/" /var/www/moodle/html/config.php
+
+                  export EnvDatabaseClusterReadOnlyEndpointAddress=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/ClusterReadOnlyEndpoint --query Parameters[0].Value)
+                  export EnvDatabaseClusterReadOnlyEndpointAddress=`echo $EnvDatabaseClusterReadOnlyEndpointAddress | sed -e 's/^"//' -e 's/"$//'`
+                  sed -i "s/'instance' => '.*/'instance' => '"$EnvDatabaseClusterReadOnlyEndpointAddress"',/" /var/www/moodle/html/config.php
+
+                  export EnvDnsName=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/Network/DomainName --query Parameters[0].Value)
+                  export EnvDnsName=`echo $EnvDnsName | sed -e 's/^"//' -e 's/"$//'`
+                  sed -i'' -e "s,\$hostname = .*,\$hostname = '"$EnvDnsName"';," /var/www/moodle/html/config.php
+
+                  export EnvIsMoodleSetupCompleted=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/IsMoodleSetupCompleted --query Parameters[0].Value)
+                  export EnvIsMoodleSetupCompleted=`echo $EnvIsMoodleSetupCompleted | sed -e 's/^"//' -e 's/"$//'` 
+
+                  export EnvElastiCacheClusterEndpointAddress=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/Cache/session/ElastiCacheClusterEndpoint --query Parameters[0].Value)
+                  export EnvElastiCacheClusterEndpointAddress=`echo $EnvElastiCacheClusterEndpointAddress | sed -e 's/^"//' -e 's/"$//'`                  
+                  
+                  export EnvElastiCacheEngine=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/Cache/session/Engine --query Parameters[0].Value)
+                  export EnvElastiCacheEngine=`echo $EnvElastiCacheEngine | sed -e 's/^"//' -e 's/"$//'`                  
+                 
+                  #setting up elasticache dependencies for cache
+                  if [ "$EnvIsMoodleSetupCompleted" != "No" ] && [ "$EnvElastiCacheClusterEndpointAddress" != "null" -a "$EnvElastiCacheClusterEndpointAddress" != "" ]; then
+                    sed -i "s/\$SessionEndpoint = .*/\$SessionEndpoint = '"$EnvElastiCacheClusterEndpointAddress"';/" /var/www/moodle/html/config.php
+
+                    if [ "$EnvElastiCacheEngine" == "Redis"]; then
+                      sed -i "s/\$SessionsCacheType = .*/\$SessionsCacheType = '"$EnvElastiCacheEngine"';/" /var/www/moodle/html/config.php
+                    else
+                      #update Moodle source to use DYNAMIC_CLIENT_MODE so Moodle can detect changes to the elasticache cluster membership
+                      sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
+                    fi
+
+                    
+                  else
+                    sed -i "s/\$SessionEndpoint = .*/\$SessionEndpoint = '';/" /var/www/moodle/html/config.php
+                  fi
+                  
+                  sudo systemctl restart php-fpm
+              mode: 000500
+              owner: root
+              group: root
+
+            /tmp/before_install.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  
+                  cd /opt/codedeploy-agent/deployment-root/$DEPLOYMENT_GROUP_ID/$DEPLOYMENT_ID/deployment-archive/.pipeline/
+
+                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+                  region=${!availabilityzone:0:-1}
+
+                  export EnvDatabaseType=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/Type --query Parameters[0].Value)
+                  export EnvDatabaseType=`echo $EnvDatabaseType | sed -e 's/^"//' -e 's/"$//'`
+                  
+                  if [ "$EnvDatabaseType" == "MySQL" ]; then
+                    #Installing and configuring MYSQL libs.
+                    sh install_mysql_dependencies.sh
+                  else
+                    #Installing and configuring PGSQL libs.
+                    sh install_pgsql_dependencies.sh
+                  fi
+
+                  #increasing PHP max_input_vars to 5000
+                  sed -i 's/; max_input_vars.*/max_input_vars = 5000/' /etc/php.ini
+                  
+                  #Configuring OPCache
+                  sh configure_opcache.sh
+
+                  #configuring Cache clients
+                  sh install_cacheclient.sh
+
+                  # Setting up EFS shared file storage
+                  sh setup_efs.sh
+              mode: 000500
+              owner: root
+              group: root
+            /tmp/setup_efs.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+
+                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+                  region=${!availabilityzone:0:-1}
+
+                  #Mount shared storage
+                  if grep -qs '/var/www/moodle/data ' /proc/mounts; then
+                    echo "/var/www/moodle/data is mounted."
+                  else
+                    export EnvElasticFileSystem=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/SharedFile/ElasticFileSystem --query Parameters[0].Value)
+                    export EnvElasticFileSystem=`echo $EnvElasticFileSystem | sed -e 's/^"//' -e 's/"$//'`
+
+                    sudo mkdir -p /$EnvElasticFileSystem
+                    sudo mountpoint -q /$EnvElasticFileSystem || sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/ /$EnvElasticFileSystem
+                                    
+                    #Create directories for Moodle
+                    sudo mkdir -p /$EnvElasticFileSystem/data
+                    sudo mkdir -p /$EnvElasticFileSystem/cache
+                    sudo mkdir -p /$EnvElasticFileSystem/temp
+
+                    chown apache:apache /$EnvElasticFileSystem/data/
+                    chown apache:apache /$EnvElasticFileSystem/cache/
+                    chown apache:apache /$EnvElasticFileSystem/temp/
+                                    
+                    sudo umount -f /$EnvElasticFileSystem
+
+                    mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/data /var/www/moodle/data
+                    #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/cache /var/www/moodle/cache
+                    #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/temp /var/www/moodle/temp
+                  fi
+              mode: 000500
+              owner: root
+              group: root
+            /tmp/install_pgsql_dependencies.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  amazon-linux-extras install -y postgresql13
+                  yum install -y php-pgsql
+              mode: 000500
+              owner: root
+              group: root
+            /tmp/install_mysql_dependencies.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  
+                  amazon-linux-extras install -y mariadb10.5
+                  yum install -y php-mysqlnd
+              mode: 000500
+              owner: root
+              group: root
+            /tmp/configure_opcache.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  # create hidden opcache directory locally & change owner to apache
+                  if [ ! -d /var/www/.opcache ]; then                    
+                      mkdir -p /var/www/.opcache
+                  fi
+                  #Ensure opcache is enabled and add settings recomended by moodle at https://docs.moodle.org/34/en/OPcache
+                  sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php.d/10-opcache.ini
+                  sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php.d/10-opcache.ini
+                  sed -i 's/opcache.max_accelerated_files=.*/opcache.max_accelerated_files=8000/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=300/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.use_cwd=.*/opcache.use_cwd=1/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.validate_timestamps=.*/opcache.validate_timestamps=1/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' /etc/php.d/10-opcache.ini
+                  sed -i 's/;opcache.enable_file_override=.*/opcache.enable_file_override=60/' /etc/php.d/10-opcache.ini
+              mode: 000500
+              owner: root
+              group: root
+            /tmp/install_cacheclient.sh:
+              content:
+                !Sub |
+                  #!/bin/bash -xe
+                  
+                  #Install memcached and then remove it. Memcached is not actually needed. We install amazon-elasticache-cluster-client.so instead. However Moodle does not detect memcached is installed. Therefore, this tricks Moodle into thinking it is installed.
+                  sudo yum install -y php-pecl-memcached
+                  sudo yum remove -y php-pecl-memcached
+                  sudo yum install -y php-redis
+                  
+                  
+                  if [ $(uname -a | grep -c x86_64) == "1" ]; then
+                      echo "downloading x86 client for ElastiCache"
+                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-X86-openssl3
+                      tar -xf '/tmp/latest-64bit-X86'
+                  else 
+                      echo "downloading ARM-64 client for ElastiCache"
+                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-arm-openssl3
+                      tar -xf '/tmp/latest-64bit-arm'
+                  fi
+                  
+                  cp 'amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
+                  if [ ! -f /etc/php.d/50-memcached.ini ]; then
+                      touch /etc/php.d/50-memcached.ini
+                  fi
+                  echo 'extension=/usr/lib64/php/modules/amazon-elasticache-cluster-client.so;' >> /etc/php.d/50-memcached.ini
+                  echo 'extension=igbinary.so;' >> /etc/php.d/50-memcached.ini
+
+                  if [ ! -f /etc/php.d/20-redis.ini ]; then
+                      touch /etc/php.d/20-redis.ini
+                  fi
+                  echo 'extension=/usr/lib64/php/modules/amazon-elasticache-cluster-client.so;' >> /etc/php.d/20-redis.ini
+                  echo 'extension=igbinary.so;' >> /etc/php.d/20-redis.ini
+                  
+                  
+              mode: 000500
+              owner: root
+              group: root
+
+            /tmp/moodle-git-config.sh:
+              content: !Sub |
+                  #!/bin/bash -x
+
+                  git config --system user.name 'AWS User'
+                  git config --system user.email noreply@amazon.com
+
+                  git config --system credential.helper '!aws codecommit credential-helper $@'
+                  git config --system credential.UseHttpPath true
+
+                  DIR="/tmp/moodle"
+                  if [ -d "$DIR" ]; then
+                    cd /tmp/moodle
+                  else
+                    mkdir /tmp/moodle
+                    mkdir /tmp/moodle/.pipeline
+
+                    # Get Latest Moodle stable version
+                    wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable401/moodle-latest-401.tgz
+                    tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /tmp/moodle/
+                    wget -O /tmp/moodle/lib/aws.phar https://docs.aws.amazon.com/aws-sdk-php/v3/download/aws.phar
+                    cd /tmp/moodle
+                    git init
+                    git checkout -b main
+                    git add .
+                    git commit -m "Moodle original code commit."
+                    git remote add origin ${MoodleRepo.CloneUrlHttp}
+                  fi
+
+                  #Added code scripts for CodePipeline
+                  
+                  cp -f /tmp/appspec.yml /tmp/moodle/
+
+                  cp -f /tmp/start_application.sh /tmp/moodle/.pipeline/
+                  cp -f /tmp/stop_application.sh /tmp/moodle/.pipeline/
+                  cp -f /tmp/basic_health_check.sh /tmp/moodle/.pipeline/
+                  
+                  cp -f /tmp/config.php /tmp/moodle/
+                  
+                  cp -f /tmp/before_install.sh /tmp/moodle/.pipeline/
+                  cp -f /tmp/setup_efs.sh /tmp/moodle/.pipeline/
+                  cp -f /tmp/configure_opcache.sh /tmp/moodle/.pipeline/
+
+                  cp -f /tmp/install_mysql_dependencies.sh /tmp/moodle/.pipeline/
+                  cp -f /tmp/install_pgsql_dependencies.sh /tmp/moodle/.pipeline/
+                  cp -f /tmp/install_cacheclient.sh /tmp/moodle/.pipeline/
+
+                  cp -f /tmp/after_install.sh /tmp/moodle/.pipeline/
+
+                  git add --all
+                  git commit -m "Moodle Code pipeline commits"
+
+                  git push -u origin main
+
+                  # get instance id
+                  instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+
+                  # get region from instance meta-data
+                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
+                  region=${!availabilityzone:0:-1}
+
+                  # wait for Moodle setup to be completed
+                  echo "Start checking whether Moodle setup completed or not"
+                  counter=0
+                  while true
+                  do 
+                      sleep 60
+                      export EnvIsMoodleSetupCompleted=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/IsMoodleSetupCompleted --query Parameters[0].Value)
+                      export EnvIsMoodleSetupCompleted=`echo $EnvIsMoodleSetupCompleted | sed -e 's/^"//' -e 's/"$//'` 
+
+                      if [ "$EnvIsMoodleSetupCompleted" == "No" ]; then
+                        ((counter++))
+                        echo "Waiting for 1 more minute, running for the $counter time."
+                      else
+                        break
+                      fi
+                      
+                  done
+
+                  # script to update Moodle pipeline release 
+
+                  aws codepipeline start-pipeline-execution --name ${ProjectName}-Pipeline --region $region
+
+                  # set ASG to zero which terminates instance
+
+                  export EnvWebAppASGName=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/WebAppASGName --query Parameters[0].Value)
+                  export EnvWebAppASGName=`echo $EnvWebAppASGName | sed -e 's/^"//' -e 's/"$//'` 
+
+                  aws autoscaling update-auto-scaling-group --auto-scaling-group-name $EnvWebAppASGName --desired-capacity ${WebAsgMin} --min-size ${WebAsgMin} --max-size ${WebAsgMax} --region $region
+
+                  # Shutting down pipeline-helper instance
+                  # get autoscaling group name
+                  asg_name=$(aws autoscaling describe-auto-scaling-instances --instance-ids $instance_id --region $region --output text --query 'AutoScalingInstances[0].AutoScalingGroupName')
+
+                  # set pipeline-helper ASG to zero which terminates instance
+                  aws autoscaling update-auto-scaling-group --auto-scaling-group-name $asg_name --min-size 0 --desired-capacity 0 --region $region
+              mode: '000755'
+              owner: root
+              group: root
+          commands:
+            update-moodle-repo:
+              command: ./moodle-git-config.sh
+              cwd: /tmp
+              ignoreErrors: false
+                   
+    Properties:
+      LaunchTemplateData:
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              DeleteOnTermination: true
+              VolumeSize: 10
+              VolumeType: gp3
+        IamInstanceProfile: 
+          Arn: !GetAtt InstanceProfile.Arn
+        ImageId: !If [UsingGraviton2Ami, !Ref LatestArmAmiId, !Ref LatestAmiId]
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref EC2KeyName
+        SecurityGroupIds: 
+          - !Ref PipelineSecurityGroup
+        UserData:
+          "Fn::Base64":
+            !Sub |
+            #!/bin/bash -xe
+            sudo systemctl enable amazon-ssm-agent
+            sudo systemctl start amazon-ssm-agent
+            sudo systemctl status amazon-ssm-agent
+
+            /opt/aws/bin/cfn-init --configsets moodle_git_config --verbose --stack ${AWS::StackName} --resource PipelineHelperLaunchTemplate --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource PipelineHelperASGroup --region ${AWS::Region}
+            
+Outputs:
+  CodeArtifactS3BucketArn:
+    Value: !GetAtt CodeArtifactS3Bucket.Arn
+  CodeArtifactS3BucketName:
+    Value: !Ref CodeArtifactS3Bucket
+  MoodleRepoName:
+    Value: !GetAtt MoodleRepo.Name
+  MoodleRepoArn:
+    Value: !GetAtt MoodleRepo.Arn
