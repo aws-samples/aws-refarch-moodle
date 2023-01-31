@@ -161,8 +161,9 @@ Metadata:
 
 Parameters:
   DeploymentLocation:
-    Description: Location to deploy from (S3 URL)
-    Type: String    
+    Description: Location to deploy from (S3 URL), Keep it as is unless you created your own S3 bucket
+    Type: String
+    Default: https://s3.amazonaws.com/aws-refarch/moodle/latest/templates
   BastionInstanceType:
     AllowedValues:
       - t3.nano 
