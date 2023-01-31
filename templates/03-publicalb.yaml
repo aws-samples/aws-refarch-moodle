@@ -4,7 +4,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: Reference Architecture to host Moodle on AWS - Creates Application Load Balancer
 
 Metadata:
-
   AWS::CloudFormation::Interface:
     ParameterGroups:
     - Label:
@@ -28,15 +27,12 @@ Metadata:
         default: Subnets
 
 Parameters:
-
   NumberOfSubnets:
     AllowedValues:
+    - 1
     - 2
     - 3
-    - 4
-    - 5
-    - 6
-    Default: 3
+    Default: 2
     Description: Number of subnets. This must match your selections in the list of subnets below.
     Type: String 
   PublicAlbAcmCertificate:
@@ -52,6 +48,11 @@ Parameters:
   Vpc:
     Description: Select an existing Vpc
     Type: AWS::EC2::VPC::Id
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: The Moodle Project Name
+    Type: String
 
 Conditions:
 
@@ -65,41 +66,16 @@ Conditions:
       !Equals [ 2, !Ref NumberOfSubnets ]
   NumberOfSubnets3:
       !Equals [ 3, !Ref NumberOfSubnets ]
-  NumberOfSubnets4:
-      !Equals [ 4, !Ref NumberOfSubnets ]
-  NumberOfSubnets5:
-      !Equals [ 5, !Ref NumberOfSubnets ]
-  NumberOfSubnets6:
-      !Equals [ 6, !Ref NumberOfSubnets ]
   Subnet0: !Or
     - !Condition NumberOfSubnets1
     - !Condition NumberOfSubnets2
     - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
   Subnet1: !Or
     - !Condition NumberOfSubnets2
     - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet2: !Or
-    - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet3: !Or
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet4: !Or
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet5: !Condition NumberOfSubnets6
+  Subnet2: !Condition NumberOfSubnets3
 
 Resources:
-  
   PublicAlbListenerNoSslCertificate:
     Type : AWS::ElasticLoadBalancingV2::Listener
     Properties:
@@ -109,6 +85,7 @@ Resources:
       LoadBalancerArn: !Ref PublicApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
+
   PublicAlbListenerSslCertificate:
     Condition: SslCertificate
     Type : AWS::ElasticLoadBalancingV2::Listener
@@ -121,6 +98,7 @@ Resources:
       LoadBalancerArn: !Ref PublicApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
+
   PublicApplicationLoadBalancer: 
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -132,49 +110,39 @@ Resources:
           !If
             [ NumberOfSubnets2,
             [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
-            !If
-              [ NumberOfSubnets3,
-              [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ],
-              !If
-                [ NumberOfSubnets4,
-                [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ] ],
-                !If
-                  [ NumberOfSubnets5,
-                  [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ], !Select [ 4, !Ref Subnet ] ],
-                  [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ], !Select [ 4, !Ref Subnet ], !Select [ 5, !Ref Subnet ] ]
-                  ]
-                ]
-              ]
+            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ]
             ]
           ]
       LoadBalancerAttributes:
       - Key: idle_timeout.timeout_seconds
-        Value: 60
+        Value: '60'
       SecurityGroups:
       - !Ref PublicAlbSecurityGroup
       Tags:
       - Key: Name
-        Value: !Join [ '', [ 'Public ALB / ', !Ref 'AWS::StackName' ] ]
+        Value: !Join [ '-', [ 'Moodle',!Ref ProjectName,'alb'  ] ]
   PublicAlbTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       HealthCheckIntervalSeconds: 30
-      HealthCheckPath: /README.txt
+      HealthCheckPath: /status.txt
       HealthCheckTimeoutSeconds: 5
       Name: !Join [ '', [ 'PublicALB-', !Ref Vpc ] ]
       Port: 80
       Protocol: HTTP
       Tags:
       - Key: Name
-        Value: !Join [ '', [ 'Public ALB / ', !Ref 'AWS::StackName' ] ]
+        Value: !Join [ '-', [ 'Moodle',!Ref ProjectName,'alb-TG'  ] ]
       UnhealthyThresholdCount: 5
       VpcId: !Ref Vpc
 
 Outputs:
-
   PublicAlbTargetGroupArn:
     Value:
       !Ref PublicAlbTargetGroup
+  PublicAlbTargetGroupName:
+    Value:
+      !GetAtt PublicAlbTargetGroup.TargetGroupName
   PublicAlbCanonicalHostedZoneId:
     Value:
       !GetAtt PublicApplicationLoadBalancer.CanonicalHostedZoneID
@@ -184,6 +152,9 @@ Outputs:
   PublicAlbFullName:
     Value:
       !GetAtt PublicApplicationLoadBalancer.LoadBalancerFullName
+  PublicAlbName:
+    Value:
+      !GetAtt PublicApplicationLoadBalancer.LoadBalancerName
   PublicAlbHostname:
     Value:
       !If [ NoSslCertificate, !Join [ '', [ 'http://', !GetAtt PublicApplicationLoadBalancer.DNSName ] ], !Join [ '', [ 'https://', !GetAtt PublicApplicationLoadBalancer.DNSName ] ] ]
