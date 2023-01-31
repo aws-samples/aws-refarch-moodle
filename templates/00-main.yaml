@@ -3,8 +3,6 @@ AWSTemplateFormatVersion: 2010-09-09
 
 Description: Stack to deploy a highly available, elastic, scalable Moodle environment. This master stack launches multiple nested stacks for different tiers. !! This can only be run in certain AWS Regions - 'us-east-1', 'us-east-2', 'us-west-2', 'eu-west-1'.
 
-
-
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -16,46 +14,36 @@ Metadata:
         - SshAccessCidr
         - HostedZoneName
         - DomainName
-        - UseRoute53Boolean
+        - NotifyEmailAddress
     - Label:
         default: Network
       Parameters:
         - NumberOfAZs
         - AvailabilityZones
         - VpcCidr
-        - VpcTenancy
         - PublicSubnet0Cidr
         - PublicSubnet1Cidr
         - PublicSubnet2Cidr
-        - PublicSubnet3Cidr
-        - PublicSubnet4Cidr
-        - PublicSubnet5Cidr
-        - WebSubnet0Cidr
-        - WebSubnet1Cidr
-        - WebSubnet2Cidr
-        - WebSubnet3Cidr
-        - WebSubnet4Cidr
-        - WebSubnet5Cidr
+        - AppSubnet0Cidr
+        - AppSubnet1Cidr
+        - AppSubnet2Cidr
         - DataSubnet0Cidr
         - DataSubnet1Cidr
         - DataSubnet2Cidr
-        - DataSubnet3Cidr
-        - DataSubnet4Cidr
-        - DataSubnet5Cidr
     - Label:
-        default: File System Tier
+        default: Shared File Storage
       Parameters:
-        - EfsPerformanceMode
-        - EfsEncrpytedBoolean
-        - EfsCmk
-        - EfsGrowth
-        - EfsGrowthInstanceType
+        - SharedStorageEncryptionBoolean
+        - SharedStorageEncryptionCmk
     - Label:
         default: Database Tier
       Parameters:
         - DatabaseType
+        - DatabaseUseServerless
+        - DatabaseMinCapacity
+        - DatabaseMaxCapacity
         - DatabaseInstanceType
-        - DatabaseEncrpytedBoolean
+        - DatabaseEncryptedBoolean
         - DatabaseCmk
         - DatabaseMasterUsername
         # - DatabaseMasterPassword
@@ -63,7 +51,7 @@ Metadata:
     - Label:
         default: Caching Tier
       Parameters:
-        - CacheType
+        - CacheEngineType
         - UseSessionCacheBoolean
         - SessionCacheNodeType
         - UseApplicationCacheBoolean
@@ -73,6 +61,7 @@ Metadata:
     - Label:
         default: Bastion Tier
       Parameters:
+        - NeedBastionHost
         - BastionInstanceType
     - Label:
         default: Web Tier
@@ -87,33 +76,33 @@ Metadata:
         - MoodleLocale
     ParameterLabels:
       DeploymentLocation:
-        default: Location to deploy from (S3 URL)
+        default: "Location to deploy from (S3 URL without trailing slash, e.g.: https://<my-bucket>.s3.<region>.amazonaws.com)"
       BastionInstanceType:
         default: Bastion Instance Type
+      NeedBastionHost:
+        default: Need Bastion Host?
       CloudFrontAcmCertificate:
         default: CloudFront Certificate ARN
       DatabaseCmk:
         default: AWS KMS CMK for RDS 
-      DatabaseEncrpytedBoolean:
+      DatabaseEncryptedBoolean:
         default: Encrypted DB Cluster
+      DatabaseUseServerless:
+        default: Should the database use Serverless engines?
+      DatabaseMinCapacity:
+        default: (If serverless) Minimum capacity for database
+      DatabaseMaxCapacity:
+        default: (If serverless) Maximum capacity for database
       DatabaseInstanceType:
-        default: DB Instance Class
+        default: (If NOT serverless) DB Instance Type
       DatabaseMasterUsername:
         default: DB Master Username
-      # DatabaseMasterPassword:
-      #   default: DB Master Password
       DatabaseName:
         default: DB Name
-      EfsCmk:
-        default: AWS KMS CMK for EFS
-      EfsEncrpytedBoolean:
-        default: Encrpyted EFS?
-      EfsPerformanceMode:
-        default: EFS Performance Mode
-      EfsGrowth:
-        default: Add dummy data (GiB)
-      EfsGrowthInstanceType:
-        default: Instance Type
+      SharedStorageEncryptionBoolean:
+        default: Shared File Storage Encrypted?
+      SharedStorageEncryptionCmk:
+        default: (Optional) Shared File Storage Encryption Key ARN (AWS KMS CMK) 
       EC2KeyName:
         default: EC2 Key Pair
       PublicAlbAcmCertificate:
@@ -137,7 +126,7 @@ Metadata:
       HostedZoneName:
         default: Hosted Zone
       DomainName:
-        default: Site Domain
+        default: Domain Name for Moodle site
       MoodleLocale:
         default: Language Code
       AvailabilityZones:
@@ -146,48 +135,28 @@ Metadata:
         default: Number of Availability Zones
       VpcCidr:
         default: VpcCidr
-      VpcTenancy:
-        default: VpcTenancy
       PublicSubnet0Cidr:
         default: Public Subnet 0
       PublicSubnet1Cidr:
         default: Public Subnet 1
       PublicSubnet2Cidr:
         default: Public Subnet 2
-      PublicSubnet3Cidr:
-        default: Public Subnet 3
-      PublicSubnet4Cidr:
-        default: Public Subnet 4
-      PublicSubnet5Cidr:
-        default: Public Subnet 5
-      WebSubnet0Cidr:
-        default: Web Subnet 0
-      WebSubnet1Cidr:
-        default: Web Subnet 1
-      WebSubnet2Cidr:
-        default: Web Subnet 2
-      WebSubnet3Cidr:
-        default: Web Subnet 3
-      WebSubnet4Cidr:
-        default: Web Subnet 4
-      WebSubnet5Cidr:
-        default: Web Subnet 5
+      AppSubnet0Cidr:
+        default: App Subnet 0
+      AppSubnet1Cidr:
+        default: App Subnet 1
+      AppSubnet2Cidr:
+        default: App Subnet 2
       DataSubnet0Cidr:
         default: Data Subnet 0
       DataSubnet1Cidr:
         default: Data Subnet 1
       DataSubnet2Cidr:
         default: Data Subnet 2
-      DataSubnet3Cidr:
-        default: Data Subnet 3
-      DataSubnet4Cidr:
-        default: Data Subnet 4
-      DataSubnet5Cidr:
-        default: Data Subnet 5
-      UseRoute53Boolean:
-        default: Use Route 53
+      NotifyEmailAddress:
+        default: Email address for any notification
       UseCloudFrontBoolean:
-        default: Use Cloud Front
+        default: Use CloudFront
 
 
 Parameters:
@@ -196,194 +165,13 @@ Parameters:
     Type: String    
   BastionInstanceType:
     AllowedValues:
-    - t2.nano 
-    - t2.micro 
-    - t2.small 
-    - t2.medium 
-    - t2.large 
-    - t2.xlarge 
-    - t2.2xlarge 
-    - m3.medium 
-    - m3.large 
-    - m3.xlarge 
-    - m3.2xlarge 
-    - m4.large 
-    - m4.xlarge 
-    - m4.2xlarge 
-    - m4.4xlarge 
-    - m4.10xlarge 
-    - m4.16xlarge 
-    - m5.large 
-    - m5.xlarge 
-    - m5.2xlarge 
-    - m5.4xlarge 
-    - m5.12xlarge 
-    - m5.24xlarge 
-    - c3.large 
-    - c3.xlarge 
-    - c3.2xlarge 
-    - c3.4xlarge 
-    - c3.8xlarge 
-    - c4.large 
-    - c4.xlarge 
-    - c4.2xlarge 
-    - c4.4xlarge 
-    - c4.8xlarge 
-    - c5.large 
-    - c5.xlarge 
-    - c5.2xlarge 
-    - c5.4xlarge 
-    - c5.9xlarge 
-    - c5.18xlarge
-    - r3.large 
-    - r3.xlarge 
-    - r3.2xlarge 
-    - r3.4xlarge 
-    - r3.8xlarge 
-    - r4.large 
-    - r4.xlarge 
-    - r4.2xlarge 
-    - r4.4xlarge 
-    - r4.8xlarge 
-    - r4.16xlarge 
-    - x1.16xlarge 
-    - x1.32xlarge 
-    - x1e.xlarge 
-    - x1e.2xlarge 
-    - x1e.4xlarge 
-    - x1e.8xlarge 
-    - x1e.16xlarge 
-    - x1e.32xlarge
-    - d2.xlarge 
-    - d2.2xlarge 
-    - d2.4xlarge 
-    - d2.8xlarge 
-    - h1.2xlarge 
-    - h1.4xlarge 
-    - h1.8xlarge 
-    - h1.16xlarge 
-    - i2.xlarge 
-    - i2.2xlarge 
-    - i2.4xlarge 
-    - i2.8xlarge 
-    - i3.large 
-    - i3.xlarge 
-    - i3.2xlarge 
-    - i3.4xlarge 
-    - i3.8xlarge 
-    - i3.16xlarge
-    - f1.2xlarge 
-    - f1.16xlarge 
-    - g2.2xlarge 
-    - g2.8xlarge 
-    - g3.4xlarge 
-    - g3.8xlarge 
-    - g3.16xlarge 
-    - p2.xlarge 
-    - p2.8xlarge 
-    - p2.16xlarge 
-    - p3.2xlarge 
-    - p3.8xlarge 
-    - p3.16xlarge
-    ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: t2.nano
-    Description: Bastion EC2 instance type.
-    Type: String
-  PublicAlbAcmCertificate:
-    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
-    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the domain name you use below.'
-    Type: String
-  CloudFrontAcmCertificate:
-    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
-    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the CloudFront distribution certificate - this certificate should be created in the us-east-1 (N. Virginia) region and must reference the Moodle domain name you use below.'
-    Type: String
-  DatabaseCmk:
-    Description: AWS KMS Customer Master Key (CMK) to encrypt database cluster
-    Type: String
-  DatabaseType:
-    AllowedValues:
-      - MySQL
-      - PostgreSQL
-    Default: PostgreSQL
-    Description: Indicates whether to use Aurora MySQL or PostgreSQL.
-    Type: String
-  DatabaseEncrpytedBoolean:
-    AllowedValues:
-      - true
-      - false
-    Default: true
-    Description: Indicates whether the DB instances in the cluster are encrypted.
-    Type: String
-  DatabaseInstanceType:
-    AllowedValues:
-      - db.t3.large
-      - db.r5.large
-      - db.r5.xlarge
-      - db.r5.2xlarge
-      - db.r5.4xlarge
-      - db.r5.8xlarge
-      - db.r5.12xlarge
-      - db.r5.16xlarge
-      - db.r6g.large
-      - db.r6g.xlarge
-      - db.r6g.2xlarge
-      - db.r6g.4xlarge
-      - db.r6g.8xlarge
-      - db.r6g.12xlarge
-      - db.r6g.16xlarge
-    ConstraintDescription: Must be a valid RDS instance class.
-    Default: db.r5.large
-    Description: The Amazon RDS database instance class.
-    Type: String
-  DatabaseMasterUsername:
-    AllowedPattern: ^([a-zA-Z0-9]*)$
-    Description: The Amazon RDS master username.
-    ConstraintDescription: Must contain only alphanumeric characters and be at least 8 characters.
-    MaxLength: 16
-    MinLength: 1
-    Type: String
-    Default: moodle
-  # DatabaseMasterPassword:
-  #   AllowedPattern: ^([a-zA-Z0-9`~!#$%^&*()_+,\\-])*$
-  #   ConstraintDescription: Must be letters (upper or lower), numbers, spaces, and these special characters `~!#$%^&*()_+,-
-  #   Description: The Amazon RDS master password. Letters, numbers, spaces, and these special characters `~!#$%^&*()_+,-
-  #   MaxLength: 41
-  #   MinLength: 8
-  #   NoEcho: true
-  #   Type: String
-  DatabaseName:
-    AllowedPattern: ^([a-zA-Z0-9]*)$
-    Description: The Amazon RDS master database name.
-    Type: String
-    Default: moodle
-  EfsEncrpytedBoolean:
-    AllowedValues:
-      - true
-      - false
-    Default: true
-    Description: Create an encrypted Amazon EFS file system.
-    Type: String
-  EfsCmk:
-    AllowedPattern: ^$|(arn:aws:kms:)([a-z0-9/:-])*([a-z0-9])$
-    ConstraintDescription: Must be an existing ARN for an AWS KMS CMK.
-    Description: '[ Optional ] The AWS KMS customer-managed CMK ARN to encrypt & decrypt the EFS file system.'
-    Type: String
-  EfsPerformanceMode:
-    AllowedValues:
-      - generalPurpose
-      - maxIO
-    Default: generalPurpose
-    Description: Select the performance mode of the file system.
-    Type: String
-  EfsGrowth:
-    Default: 0
-    ConstraintDescription: Must be an integer.
-    Description: Amount of dummy data (GiB) to add to the file system (max 6144 GiB). Amazon EFS storage charges apply.
-    MaxValue: 6144
-    MinValue: 0
-    Type: Number
-  EfsGrowthInstanceType:
-    AllowedValues:
+      - t3.nano 
+      - t3.micro 
+      - t3.small 
+      - t3.medium 
+      - t3.large 
+      - t3.xlarge 
+      - t3.2xlarge
       - m5.large 
       - m5.xlarge 
       - m5.2xlarge 
@@ -408,11 +196,188 @@ Parameters:
       - r5.12xlarge
       - r5.16xlarge
       - r5.24xlarge
+      - t3a.nano 
+      - t3a.micro 
+      - t3a.small 
+      - t3a.medium 
+      - t3a.large 
+      - t3a.xlarge 
+      - t3a.2xlarge
+      - m5a.large 
+      - m5a.xlarge 
+      - m5a.2xlarge 
+      - m5a.4xlarge 
+      - m5a.8xlarge 
+      - m5a.12xlarge
+      - m5a.16xlarge
+      - m5a.24xlarge      
+      - c5a.large 
+      - c5a.xlarge 
+      - c5a.2xlarge 
+      - c5a.4xlarge 
+      - c5a.9xlarge 
+      - c5a.12xlarge
+      - c5a.18xlarge  
+      - c5a.24xlarge      
+      - r5a.large 
+      - r5a.xlarge 
+      - r5a.2xlarge 
+      - r5a.4xlarge 
+      - r5a.8xlarge 
+      - r5a.12xlarge
+      - r5a.16xlarge
+      - r5a.24xlarge
+      - t4g.nano 
+      - t4g.micro 
+      - t4g.small 
+      - t4g.medium 
+      - t4g.large 
+      - t4g.xlarge 
+      - t4g.2xlarge
+      - m6g.large 
+      - m6g.xlarge 
+      - m6g.2xlarge 
+      - m6g.4xlarge 
+      - m6g.8xlarge 
+      - m6g.12xlarge
+      - m6g.16xlarge
+      - m6g.24xlarge      
+      - c6g.large 
+      - c6g.xlarge 
+      - c6g.2xlarge 
+      - c6g.4xlarge 
+      - c6g.9xlarge 
+      - c6g.12xlarge
+      - c6g.18xlarge  
+      - c6g.24xlarge      
+      - r6g.large 
+      - r6g.xlarge 
+      - r6g.2xlarge 
+      - r6g.4xlarge 
+      - r6g.8xlarge 
+      - r6g.12xlarge
+      - r6g.16xlarge
+      - r6g.24xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: r5.xlarge
-    Description: The Amazon EC2 instance type that adds data to the file system.
+    Default: t4g.nano
+    Description: Bastion EC2 instance type.
     Type: String
-  CacheType:
+  NeedBastionHost:
+    AllowedValues:
+      - false
+      - true
+    Default: false
+    Description: Whether you need Bastion host to access machines, else you can use SSM agent by default.
+    Type: String
+  PublicAlbAcmCertificate:
+    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the domain name you use below.'
+    Type: String
+  CloudFrontAcmCertificate:
+    AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
+    Description: '[ Optional ] The AWS Certification Manager certificate ARN for the CloudFront distribution certificate - this certificate should be created in the us-east-1 (N. Virginia) region and must reference the Moodle domain name you use below.'
+    Type: String
+  DatabaseCmk:
+    Description: AWS KMS Customer Master Key (CMK) to encrypt database cluster
+    Type: String
+  DatabaseType:
+    AllowedValues:
+      - MySQL
+      - PostgreSQL
+    Default: PostgreSQL
+    Description: Indicates whether to use Aurora MySQL or PostgreSQL.
+    Type: String
+  DatabaseEncryptedBoolean:
+    AllowedValues:
+      - true
+      - false
+    Default: true
+    Description: Indicates whether the DB instances in the cluster are encrypted.
+    Type: String
+  DatabaseUseServerless:
+    AllowedValues:
+      - true
+      - false
+    Default: true
+    Description: Indicates whether the database should use the serverless engines.
+    Type: String
+  DatabaseMinCapacity:
+    AllowedValues:
+      - 0.5
+      - 1
+      - 2
+      - 4
+      - 5
+      - 16
+      - 32
+      - 64
+      - 128
+    Default: 0.5
+    Description: The minimum capacity for an Aurora DB cluster, starts with 0.5 and maximum up to 1
+    Type: String
+  DatabaseMaxCapacity:
+    AllowedValues:
+      - 0.5
+      - 1
+      - 2
+      - 4
+      - 5
+      - 16
+      - 32
+      - 64
+      - 128
+    Default: 64
+    Description: The maximum capacity for an Aurora DB cluster, starts with 0.5 and maximum up to 1
+    Type: String
+  DatabaseInstanceType:
+    AllowedValues:
+      - db.t3.medium
+      - db.t3.large
+      - db.r5.large
+      - db.r5.xlarge
+      - db.r5.2xlarge
+      - db.r5.4xlarge
+      - db.r5.8xlarge
+      - db.r5.12xlarge
+      - db.r5.16xlarge
+      - db.r6g.large
+      - db.r6g.xlarge
+      - db.r6g.2xlarge
+      - db.r6g.4xlarge
+      - db.r6g.8xlarge
+      - db.r6g.12xlarge
+      - db.r6g.16xlarge
+    ConstraintDescription: Must be a valid Aurora RDS instance type.
+    Default: db.r6g.large
+    Description: Amazon RDS database instance type (only used if non-serverless)
+    Type: String
+  DatabaseMasterUsername:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: Aurora RDS master username
+    ConstraintDescription: Must contain only alphanumeric characters and be at least 8 characters.
+    MaxLength: 16
+    MinLength: 1
+    Type: String
+    Default: moodle
+  DatabaseName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: Aurora RDS database name
+    Type: String
+    Default: moodle
+  SharedStorageEncryptionBoolean:
+    AllowedValues:
+      - true
+      - false
+    Default: true
+    Description: Do you want encrypted Shared file storage?
+    Type: String
+  SharedStorageEncryptionCmk:
+    AllowedPattern: ^$|(arn:aws:kms:)([a-z0-9/:-])*([a-z0-9])$
+    ConstraintDescription: Must be an existing ARN for an AWS KMS CMK.
+    Description: '[ Optional ] The AWS KMS customer-managed CMK ARN to encrypt & decrypt the Shared file storage.'
+    Type: String
+ 
+  CacheEngineType:
     AllowedValues:
       - Redis
       - Memcached
@@ -424,7 +389,7 @@ Parameters:
       - true
       - false
     Default: false
-    Description: Specifies whether an ElastiCache Cache Cluster should be created for sessions. Do not create a session cache during he inital deploy. You should update the stack to use session cache after completing the installation wizard.
+    Description: Specifies whether an ElastiCache Cache Cluster should be created for sessions. This will not be used at first and will be integrated only after IsMoodleSetupComplete parameter changes to 'Yes'.
     Type: String
   SessionCacheNodeType:
     AllowedValues:
@@ -445,14 +410,14 @@ Parameters:
       - cache.m6g.12xlarge
       - cache.m6g.16xlarge
     ConstraintDescription: Must be a valid Amazon ElastiCache node type.
-    Default: cache.t3.micro
+    Default: cache.m6g.large
     Description: The Amazon ElastiCache cluster node type.
     Type: String
   UseApplicationCacheBoolean:
     AllowedValues:
       - true
       - false
-    Default: true
+    Default: false
     Description: Specifies whether an ElastiCache Cache Cluster should be created to cache application content.
     Type: String
   ApplicationCacheNodeType:
@@ -474,7 +439,7 @@ Parameters:
       - cache.m6g.12xlarge
       - cache.m6g.16xlarge
     ConstraintDescription: Must be a valid Amazon ElastiCache node type.
-    Default: cache.t3.micro
+    Default: cache.m6g.large
     Description: The Amazon ElastiCache cluster node type.
     Type: String
   EC2KeyName:
@@ -483,7 +448,7 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
   SshAccessCidr:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
-    Description: The CIDR IP range that is permitted to SSH to bastion instance. Note - a value of 0.0.0.0/0 will allow access from ANY IP address.
+    Description: The CIDR IP range that is permitted to SSH to bastion instance. Note - a value of 0.0.0.0/0 will allow access from ANY IP address. You could also use <your-ip>/32 to restrict to your own public IP address.
     Type: String
     Default: 0.0.0.0/0
   WebAsgMax:
@@ -531,8 +496,70 @@ Parameters:
       - r5.12xlarge
       - r5.16xlarge
       - r5.24xlarge
+      - t3a.nano 
+      - t3a.micro 
+      - t3a.small 
+      - t3a.medium 
+      - t3a.large 
+      - t3a.xlarge 
+      - t3a.2xlarge
+      - m5a.large 
+      - m5a.xlarge 
+      - m5a.2xlarge 
+      - m5a.4xlarge 
+      - m5a.8xlarge 
+      - m5a.12xlarge
+      - m5a.16xlarge
+      - m5a.24xlarge      
+      - c5a.large 
+      - c5a.xlarge 
+      - c5a.2xlarge 
+      - c5a.4xlarge 
+      - c5a.9xlarge 
+      - c5a.12xlarge
+      - c5a.18xlarge  
+      - c5a.24xlarge      
+      - r5a.large 
+      - r5a.xlarge 
+      - r5a.2xlarge 
+      - r5a.4xlarge 
+      - r5a.8xlarge 
+      - r5a.12xlarge
+      - r5a.16xlarge
+      - r5a.24xlarge
+      - t4g.nano 
+      - t4g.micro 
+      - t4g.small 
+      - t4g.medium 
+      - t4g.large 
+      - t4g.xlarge 
+      - t4g.2xlarge
+      - m6g.large 
+      - m6g.xlarge 
+      - m6g.2xlarge 
+      - m6g.4xlarge 
+      - m6g.8xlarge 
+      - m6g.12xlarge
+      - m6g.16xlarge
+      - m6g.24xlarge      
+      - c6g.large 
+      - c6g.xlarge 
+      - c6g.2xlarge 
+      - c6g.4xlarge 
+      - c6g.9xlarge 
+      - c6g.12xlarge
+      - c6g.18xlarge  
+      - c6g.24xlarge      
+      - r6g.large 
+      - r6g.xlarge 
+      - r6g.2xlarge 
+      - r6g.4xlarge 
+      - r6g.8xlarge 
+      - r6g.12xlarge
+      - r6g.16xlarge
+      - r6g.24xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: t3.large
+    Default: m6g.large
     Description: The Amazon EC2 instance type for your web instances.
     Type: String
   HostedZoneName:
@@ -553,11 +580,9 @@ Parameters:
     Type: List<AWS::EC2::AvailabilityZone::Name>
   NumberOfAZs:
     AllowedValues:
+    - 1
     - 2
     - 3
-    - 4
-    - 5
-    - 6
     Default: 2
     Description: Number of Availability Zones to use in the VPC. This must match your
       selections in the list of Availability Zones parameter.
@@ -567,13 +592,6 @@ Parameters:
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Default: 10.0.0.0/16
     Description: CIDR block for the VPC
-    Type: String
-  VpcTenancy:
-    AllowedValues:
-    - default
-    - dedicated
-    Default: default
-    Description: The allowed tenancy of instances launched into the VPC
     Type: String
   DataSubnet0Cidr:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
@@ -593,24 +611,6 @@ Parameters:
     Default: 10.0.102.0/24
     Description: CIDR block for data subnet 2 located in Availability Zone 2
     Type: String
-  DataSubnet3Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.103.0/24
-    Description: CIDR block for data subnet 3 located in Availability Zone 3
-    Type: String
-  DataSubnet4Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.104.0/24
-    Description: CIDR block for data subnet 4 located in Availability Zone 4
-    Type: String
-  DataSubnet5Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.105.0/24
-    Description: CIDR block for data subnet 5 located in Availability Zone 5
-    Type: String
   PublicSubnet0Cidr:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
@@ -629,76 +629,37 @@ Parameters:
     Default: 10.0.202.0/24
     Description: CIDR block for Public subnet 2 located in Availability Zone 2
     Type: String
-  PublicSubnet3Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.203.0/24
-    Description: CIDR block for Public subnet 3 located in Availability Zone 3
-    Type: String
-  PublicSubnet4Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.204.0/24
-    Description: CIDR block for Public subnet 4 located in Availability Zone 4
-    Type: String
-  PublicSubnet5Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.205.0/24
-    Description: CIDR block for Public subnet 5 located in Availability Zone 5
-    Type: String
-  WebSubnet0Cidr:
+  AppSubnet0Cidr:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Default: 10.0.0.0/22
-    Description: CIDR block for Web subnet 0 located in Availability Zone 0
+    Description: CIDR block for App Subnet 0 located in Availability Zone 0
     Type: String
-  WebSubnet1Cidr:
+  AppSubnet1Cidr:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Default: 10.0.4.0/22
-    Description: CIDR block for Web subnet 1 located in Availability Zone 1
+    Description: CIDR block for App Subnet 1 located in Availability Zone 1
     Type: String
-  WebSubnet2Cidr:
+  AppSubnet2Cidr:
     AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Default: 10.0.8.0/22
-    Description: CIDR block for Web subnet 2 located in Availability Zone 2
-    Type: String
-  WebSubnet3Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.12.0/22
-    Description: CIDR block for Web subnet 3 located in Availability Zone 3
-    Type: String
-  WebSubnet4Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.16.0/22
-    Description: CIDR block for Web subnet 4 located in Availability Zone 4
-    Type: String
-  WebSubnet5Cidr:
-    AllowedPattern: "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/(1[6-9]|2[0-8]))$"
-    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
-    Default: 10.0.20.0/22
-    Description: CIDR block for Web subnet 5 located in Availability Zone 5
+    Description: CIDR block for App Subnet 2 located in Availability Zone 2
     Type: String
   UseCloudFrontBoolean:
     AllowedValues:
       - true
       - false
-    Default: true
+    Default: false
     Description: Specifies whether a CloudFront Distribution should be created to serve the Moodle website content.
     Type: String
-  UseRoute53Boolean:
-    AllowedValues:
-      - true
-      - false
-    Default: true
-    Description: Specifies whether a record set should be created in Route 53 for your Moodle domain name.
+  NotifyEmailAddress:
+    AllowedPattern: ^[a-zA-Z0-9+_.-]+@[a-zA-Z0-9.-]+$
+    Description: Email address for notification
     Type: String
+    Default: hello@yourdomain.com
 
-  
 Conditions:
   DeployWithoutSessionCache: 
     !Equals [ false, !Ref UseSessionCacheBoolean ]
@@ -707,20 +668,97 @@ Conditions:
   DeployApplicationCache: 
     !Equals [ true, !Ref UseApplicationCacheBoolean ]
   DeployRoute53: 
-    !Equals [ true, !Ref UseRoute53Boolean ]
+    !And [ 
+      !Not [!Equals ['', !Ref DomainName ] ],
+      !Not [ !Equals ['', !Ref HostedZoneName ] ]
+    ]
+  ErrorChoices:
+    !Or [
+      !And [
+        !Not [!Equals ['', !Ref DomainName ] ], #with domain name
+        !Equals [ true, !Ref UseCloudFrontBoolean ], #with cloudfront
+        !Equals ['', !Ref CloudFrontAcmCertificate ] #no SSL certificate
+      ],
+      !And [
+        !Not [!Equals ['', !Ref HostedZoneName ] ], #with domain name internal
+        !Equals [ true, !Ref UseCloudFrontBoolean ], #with cloudfront
+        !Equals ['', !Ref CloudFrontAcmCertificate ]  #no SSL certificate
+      ]
+    ]
   DeployCloudFront: 
-    !Equals [ true, !Ref UseCloudFrontBoolean ]   
+    !Or [
+      !And [ #Domain Name with CloudFront but no SSL certificate will treat as CloudFront domain name only
+        !Not [!Equals ['', !Ref DomainName ] ],
+        !Equals [ true, !Ref UseCloudFrontBoolean ],
+        !Not [ !Equals ['', !Ref CloudFrontAcmCertificate ] ]
+      ],
+      !And [ 
+        !Equals ['', !Ref DomainName ],
+        !Equals [ true, !Ref UseCloudFrontBoolean ]
+      ]
+   ]
+  DeployWithBastionHost:
+    !Equals [true, !Ref NeedBastionHost ] 
+  SharedStorageEFS:
+    !Equals ['EFS', 'EFS' ]
+  DeployUsingRDSServerless:
+    !Equals [ true, !Ref DatabaseUseServerless ]
+  DeployUsingRDSInstances:
+    !Equals [ false, !Ref DatabaseUseServerless ]
+  NeedSSL:
+    !Or [
+    !Equals [ true, !Ref UseCloudFrontBoolean ], #Either CloudFront
+    !Not [ !Equals ['', !Ref PublicAlbAcmCertificate ] ] #Either ACM certificate at ALB
+  ]
+  CustomDomainName:
+   !Or [
+    !And [ #Domain Name with CloudFront but no SSL certificate will treat as CloudFront domain name only
+      !Not [!Equals ['', !Ref DomainName ] ],
+      !Equals [ true, !Ref UseCloudFrontBoolean ],
+      !Not [ !Equals ['', !Ref CloudFrontAcmCertificate ] ]
+    ],
+    !And [ #Domain Name with CloudFront but no SSL certificate will treat as CloudFront domain name only
+      !Not [!Equals ['', !Ref DomainName ] ],
+      !Equals [ false, !Ref UseCloudFrontBoolean ]
+    ]
+   ]
+  CloudFrontDnsName:
+    !And [
+      !Equals ['', !Ref DomainName ],
+      !Equals [ true, !Ref UseCloudFrontBoolean ] ]
+  AlbDnsName:
+    !And [
+      !Equals ['', !Ref DomainName ],
+      !Equals [ false, !Ref UseCloudFrontBoolean ] ]
+
 
 Resources:
-  MyRDSInstanceSecret:
+  #Made it to fail the CloudformationDeployment due to Error choices.
+  SomeErrorInCloudFormationParamCombinationCheckErrorChoices: 
+    Condition: ErrorChoices
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: '@#$'
+      Type: String
+      Value: ''
+
+  rdsInstanceSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Description: 'This is the secret for my RDS instance'
+      Description: 'Credentials for Moodle RDS instance'
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DatabaseMasterUsername}"}'
         GenerateStringKey: 'password'
         PasswordLength: 16
         ExcludeCharacters: '"@/\'
+  
+  IsMoodleSetupCompletedParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Sub '${AWS::StackName}', '/IsMoodleSetupCompleted' ] ]
+      Type: String
+      Value: 'No'
+      Description: SSM Parameter for Moodle Setup completed or not. Default 'No' any other value will be considered as 'Yes'
   vpc:
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -733,45 +771,26 @@ Resources:
             - !Ref AvailabilityZones
         VpcCidr:
           !Ref VpcCidr
-        VpcTenancy:
-          !Ref VpcTenancy
         PublicSubnet0Cidr:
           !Ref PublicSubnet0Cidr
         PublicSubnet1Cidr:
           !Ref PublicSubnet1Cidr
         PublicSubnet2Cidr:
           !Ref PublicSubnet2Cidr
-        PublicSubnet3Cidr:
-          !Ref PublicSubnet3Cidr
-        PublicSubnet4Cidr:
-          !Ref PublicSubnet4Cidr
-        PublicSubnet5Cidr:
-          !Ref PublicSubnet5Cidr
-        WebSubnet0Cidr:
-          !Ref WebSubnet0Cidr
-        WebSubnet1Cidr:
-          !Ref WebSubnet1Cidr
-        WebSubnet2Cidr:
-          !Ref WebSubnet2Cidr
-        WebSubnet3Cidr:
-          !Ref WebSubnet3Cidr
-        WebSubnet4Cidr:
-          !Ref WebSubnet4Cidr
-        WebSubnet5Cidr:
-          !Ref WebSubnet5Cidr
+        AppSubnet0Cidr:
+          !Ref AppSubnet0Cidr
+        AppSubnet1Cidr:
+          !Ref AppSubnet1Cidr
+        AppSubnet2Cidr:
+          !Ref AppSubnet2Cidr
         DataSubnet0Cidr:
           !Ref DataSubnet0Cidr
         DataSubnet1Cidr:
           !Ref DataSubnet1Cidr
         DataSubnet2Cidr:
           !Ref DataSubnet2Cidr
-        DataSubnet3Cidr:
-          !Ref DataSubnet3Cidr
-        DataSubnet4Cidr:
-          !Ref DataSubnet4Cidr
-        DataSubnet5Cidr:
-          !Ref DataSubnet5Cidr
       TemplateURL: !Sub '${DeploymentLocation}/01-newvpc.yaml'
+
   securitygroups:
     DependsOn: vpc
     Type: AWS::CloudFormation::Stack
@@ -781,27 +800,12 @@ Resources:
           !Ref SshAccessCidr
         Vpc:
           !GetAtt [ vpc, Outputs.Vpc ]
+        DatabaseType:
+          !Ref DatabaseType
       TemplateURL: !Sub '${DeploymentLocation}/02-securitygroups.yaml'
-  
-  s3:
-    DependsOn: securitygroups
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      Parameters:
-        S3BucketName:
-          !Sub '${AWS::StackName}'
-      TemplateURL: !Sub '${DeploymentLocation}/03-s3.yaml'
-
-  codecommit:
-    DependsOn: securitygroups
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      Parameters:
-        RepoName:
-          !Sub '${AWS::StackName}'
-      TemplateURL: !Sub '${DeploymentLocation}/03-codecommit.yaml'
 
   bastion:
+    Condition: DeployWithBastionHost
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
     Properties:
@@ -817,6 +821,7 @@ Resources:
         Subnet:
           !GetAtt [ vpc, Outputs.PublicSubnet ]
       TemplateURL: !Sub '${DeploymentLocation}/03-bastion.yaml'
+
   publicalb:
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
@@ -832,10 +837,14 @@ Resources:
           !GetAtt [ securitygroups, Outputs.PublicAlbSecurityGroup ]
         Vpc:
           !GetAtt [ vpc, Outputs.Vpc ]
+        ProjectName:
+          !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-publicalb.yaml'
+
   rds:
     DependsOn: [ securitygroups ]
     Type: AWS::CloudFormation::Stack
+    Condition: DeployUsingRDSInstances
     Properties:
       Parameters:
         DatabaseType:
@@ -844,12 +853,12 @@ Resources:
           !Ref DatabaseInstanceType
         # DatabaseMasterUsername:
         #   !Ref DatabaseMasterUsername
-        MyRDSInstanceSecretArn:
-          !Ref MyRDSInstanceSecret
+        RDSInstanceSecretArn:
+          !Ref rdsInstanceSecret
         DatabaseName:
           !Ref DatabaseName
-        DatabaseEncrpytedBoolean:
-          !Ref DatabaseEncrpytedBoolean
+        DatabaseEncryptedBoolean:
+          !Ref DatabaseEncryptedBoolean
         DatabaseCmk:
           !Ref DatabaseCmk
         DatabaseSecurityGroup:
@@ -858,43 +867,95 @@ Resources:
           !GetAtt [ vpc, Outputs.DataSubnet ]
         NumberOfSubnets:
           !Ref NumberOfAZs
+        ProjectName:
+          !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-rds.yaml'
-  efsfilesystem:
-    DependsOn: codecommit
+
+  rdsserverless:
+    DependsOn: [ securitygroups ]
+    Type: AWS::CloudFormation::Stack
+    Condition: DeployUsingRDSServerless
+    Properties:
+      Parameters:
+        DatabaseType:
+          !Ref DatabaseType
+        RDSInstanceSecretArn:
+          !Ref rdsInstanceSecret
+        DatabaseName:
+          !Ref DatabaseName
+        DatabaseMinCapacity:
+          !Ref DatabaseMinCapacity
+        DatabaseMaxCapacity:
+          !Ref DatabaseMaxCapacity
+        DatabaseEncryptedBoolean:
+          !Ref DatabaseEncryptedBoolean
+        DatabaseCmk:
+          !Ref DatabaseCmk
+        DatabaseSecurityGroup:
+          !GetAtt [ securitygroups, Outputs.DatabaseSecurityGroup ]
+        Subnet:
+          !GetAtt [ vpc, Outputs.DataSubnet ]
+        NumberOfSubnets:
+          !Ref NumberOfAZs
+        ProjectName:
+          !Sub '${AWS::StackName}'
+      TemplateURL: !Sub '${DeploymentLocation}/03-rdsserverless.yaml'      
+
+  sharedEFS:
+    Condition: SharedStorageEFS
+    DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        EncrpytedBoolean:
-          !Ref EfsEncrpytedBoolean
+        EncryptedBoolean:
+          !Ref SharedStorageEncryptionBoolean
         Cmk:
-          !Ref EfsCmk
-        Growth:
-          !Ref EfsGrowth
-        InstanceType:
-          !Ref EfsGrowthInstanceType
-        EC2KeyName:
-          !Ref EC2KeyName
+          !Ref SharedStorageEncryptionCmk
         SecurityGroup:
          !GetAtt [ securitygroups, Outputs.EfsSecurityGroup ]
         NumberOfSubnets:
           !Ref NumberOfAZs  
-        PerformanceMode:
-          !Ref EfsPerformanceMode
         Subnet:
           !GetAtt [ vpc, Outputs.DataSubnet ]
-        RepoHTTP:
-          !GetAtt [ codecommit, Outputs.RepoHTTP ]
-        RepoArn:
-          !GetAtt [ codecommit, Outputs.RepoArn ]
+        ProjectName:
+          !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-efsfilesystem.yaml'
+  
+  pipelineHelper:
+    DependsOn: securitygroups
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        EC2KeyName:
+          !Ref EC2KeyName
+        PipelineSecurityGroup:
+         !GetAtt [ securitygroups, Outputs.EfsSecurityGroup ]
+        NumberOfSubnets:
+          !Ref NumberOfAZs
+        PipelineSubnet:
+          !GetAtt [ vpc, Outputs.AppSubnet ]
+        RDSInstanceSecretArn:
+          !Ref rdsInstanceSecret
+        DomainName:
+          !Ref DomainName
+        MoodleLocale:
+          !Ref MoodleLocale
+        ProjectName:
+          !Sub '${AWS::StackName}'
+        WebAsgMax: 
+          !Ref WebAsgMax
+        WebAsgMin: 
+          !Ref WebAsgMin
+      TemplateURL: !Sub '${DeploymentLocation}/03-pipelinehelper.yaml'
+
   sessioncache:
     Condition: DeployWithSessionCache
     DependsOn: securitygroups
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        CacheType:
-          !Ref CacheType
+        CacheEngineType: !Ref CacheEngineType
+        CacheUsageType: 'session'
         Subnet:
           !GetAtt [ vpc, Outputs.DataSubnet ]
         ElastiCacheClusterName:
@@ -905,6 +966,8 @@ Resources:
           !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
         NumberOfSubnets:
           !Ref NumberOfAZs
+        ProjectName:
+          !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-elasticache.yaml'
   applicationcache:
     Condition: DeployApplicationCache
@@ -912,8 +975,8 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        CacheType:
-          !Ref CacheType
+        CacheEngineType: !Ref CacheEngineType
+        CacheUsageType: 'application'
         Subnet:
           !GetAtt [ vpc, Outputs.DataSubnet ]
         ElastiCacheClusterName: 
@@ -924,93 +987,79 @@ Resources:
           !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
         NumberOfSubnets:
           !Ref NumberOfAZs
+        ProjectName:
+          !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-elasticache.yaml'
-  webnocache:
-    DependsOn: [ publicalb, rds, efsfilesystem ]
-    Condition: DeployWithoutSessionCache
+  webapp:
+    DependsOn: [ publicalb, pipelineHelper ]
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        DatabaseClusterEndpointAddress:
-          !GetAtt [ rds, Outputs.DatabaseClusterEndpointAddress ]
-        # DatabaseMasterUsername:
-        #   !Ref DatabaseMasterUsername
-        MyRDSInstanceSecretArn:
-          !Ref MyRDSInstanceSecret
-        DatabaseName:
-          !Ref DatabaseName
-        ElasticFileSystem:
-          !GetAtt [ efsfilesystem, Outputs.ElasticFileSystem ]
+        RDSInstanceSecretArn:
+          !Ref rdsInstanceSecret
         EC2KeyName:
           !Ref EC2KeyName
         NumberOfSubnets:
           !Ref NumberOfAZs
+        Subnet:
+          !GetAtt [ vpc, Outputs.AppSubnet ]
         PublicAlbTargetGroupArn:
           !GetAtt [ publicalb, Outputs.PublicAlbTargetGroupArn ]
-        PublicAlbHostname:
-          !GetAtt [ publicalb, Outputs.PublicAlbHostname ]
-        SslCertificate:
-          !GetAtt [ publicalb, Outputs.SslCertificate ]
-        WebAsgMax:
-          !Ref WebAsgMax
-        WebAsgMin:
-          !Ref WebAsgMin
+        WebAsgMax: 1
+        WebAsgMin: 1
         WebInstanceType:
           !Ref WebInstanceType
         WebSecurityGroup:
           !GetAtt [ securitygroups, Outputs.WebSecurityGroup ]
-        Subnet:
-          !GetAtt [ vpc, Outputs.WebSubnet ]
-        DomainName:
-          !Ref DomainName
-        MoodleLocale:
-          !Ref MoodleLocale
-        ElastiCacheClusterEndpointAddress:
-          ''
+        CodeArtifactS3BucketArn: !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketArn]
       TemplateURL: !Sub '${DeploymentLocation}/04-web.yaml'
-  webcached:
-    DependsOn: [ publicalb, rds, efsfilesystem, sessioncache ]
-    Condition: DeployWithSessionCache
+
+  codePipeline:
+    DependsOn: [webapp, pipelineHelper, rds]
+    Condition: DeployUsingRDSInstances
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        DatabaseClusterEndpointAddress:
-          !GetAtt [ rds, Outputs.DatabaseClusterEndpointAddress ]
-        # DatabaseMasterUsername:
-        #   !Ref DatabaseMasterUsername
-        MyRDSInstanceSecretArn:
-          !Ref MyRDSInstanceSecret
-        DatabaseName:
-          !Ref DatabaseName
-        ElasticFileSystem:
-          !GetAtt [ efsfilesystem, Outputs.ElasticFileSystem ]
-        EC2KeyName:
-          !Ref EC2KeyName
-        NumberOfSubnets:
-          !Ref NumberOfAZs
-        PublicAlbTargetGroupArn:
-          !GetAtt [ publicalb, Outputs.PublicAlbTargetGroupArn ]
-        PublicAlbHostname:
-          !GetAtt [ publicalb, Outputs.PublicAlbHostname ]
-        SslCertificate:
-          !GetAtt [ publicalb, Outputs.SslCertificate ]
-        WebAsgMax:
-          !Ref WebAsgMax
-        WebAsgMin:
-          !Ref WebAsgMin
-        WebInstanceType:
-          !Ref WebInstanceType
-        WebSecurityGroup:
-          !GetAtt [ securitygroups, Outputs.WebSecurityGroup ]
-        Subnet:
-          !GetAtt [ vpc, Outputs.WebSubnet ]
-        DomainName:
-          !Ref DomainName
-        MoodleLocale:
-          !Ref MoodleLocale
-        ElastiCacheClusterEndpointAddress:
-          !GetAtt sessioncache.Outputs.ElastiCacheClusterEndpointAddress
-      TemplateURL: !Sub '${DeploymentLocation}/04-web.yaml'
+        CodeCommitRepoName: 
+          !GetAtt [ pipelineHelper, Outputs.MoodleRepoName ]          
+        CodeCommitRepoArn: 
+          !GetAtt [ pipelineHelper, Outputs.MoodleRepoArn ]
+        BranchName: 'main'
+        AppAutoScalingGroupName:
+          !GetAtt [ webapp, Outputs.WebAutoScalingGroupName ]
+        MoodleAppTargetGroupName:
+          !GetAtt [ publicalb, Outputs.PublicAlbTargetGroupName ]
+        CodeArtifactS3BucketName:
+          !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketName ]
+        CodeArtifactS3BucketArn:
+          !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketArn ]
+        ProjectName:
+          !Sub '${AWS::StackName}'
+      TemplateURL: !Sub '${DeploymentLocation}/05-codepipeline.yaml'
+
+  codePipelineServerless:
+    DependsOn: [webapp, pipelineHelper, rdsserverless]
+    Condition: DeployUsingRDSServerless
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        CodeCommitRepoName: 
+          !GetAtt [ pipelineHelper, Outputs.MoodleRepoName ]          
+        CodeCommitRepoArn: 
+          !GetAtt [ pipelineHelper, Outputs.MoodleRepoArn ]
+        BranchName: 'main'
+        AppAutoScalingGroupName:
+          !GetAtt [ webapp, Outputs.WebAutoScalingGroupName ]
+        MoodleAppTargetGroupName:
+          !GetAtt [ publicalb, Outputs.PublicAlbTargetGroupName ]
+        CodeArtifactS3BucketName:
+          !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketName ]
+        CodeArtifactS3BucketArn:
+          !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketArn ]
+        ProjectName:
+          !Sub '${AWS::StackName}'
+      TemplateURL: !Sub '${DeploymentLocation}/05-codepipeline.yaml'
+
   cloudfront:
     Condition: DeployCloudFront
     DependsOn: publicalb    
@@ -1024,6 +1073,34 @@ Resources:
         DomainName:
           !Ref DomainName
       TemplateURL: !Sub '${DeploymentLocation}/04-cloudfront.yaml'
+
+  CustomDnsParam:
+    Condition: CustomDomainName
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Sub '${AWS::StackName}', '/Network/DomainName' ] ]
+      Type: String
+      Value: !Join [ '', [ !If [ NeedSSL, 'https://','http://'] ,!Ref DomainName ] ]
+      Description: SSM Parameter for Moodle Public DNS URL
+  CloudFrontDnsParam:
+    DependsOn: cloudfront
+    Condition: CloudFrontDnsName
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Sub '${AWS::StackName}', '/Network/DomainName' ] ]
+      Type: String
+      Value: !Join [ '', ['https://',!GetAtt [ cloudfront, Outputs.DnsName ] ] ]
+      Description: SSM Parameter for Moodle Public DNS URL
+  AlbDnsParam:
+    DependsOn: publicalb
+    Condition: AlbDnsName
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Sub '${AWS::StackName}', '/Network/DomainName' ] ]
+      Type: String
+      Value: !Join [ '', [ !If [ NeedSSL, 'https://','http://'] ,!GetAtt [ publicalb, Outputs.PublicAlbDnsName ] ] ]
+      Description: SSM Parameter for Moodle Public DNS URL
+  
   route53:
     Condition: DeployRoute53
     DependsOn: publicalb
@@ -1031,7 +1108,7 @@ Resources:
     Properties:
       Parameters:
         DnsEndpoint:
-          !If [ DeployCloudFront, !GetAtt [ cloudfront, Outputs.DnsEndpoint ], !GetAtt [ publicalb, Outputs.PublicAlbDnsName ] ]
+          !If [ DeployCloudFront, !GetAtt [ cloudfront, Outputs.DnsName ], !GetAtt [ publicalb, Outputs.PublicAlbDnsName ] ]
         DnsHostId:
           !If [ DeployCloudFront, 'Z2FDTNDATAQYW2', !GetAtt [ publicalb, Outputs.PublicAlbCanonicalHostedZoneId ] ]
         HostedZoneName:
@@ -1040,40 +1117,42 @@ Resources:
           !Ref DomainName
       TemplateURL: !Sub '${DeploymentLocation}/05-route53.yaml'
 
-  paramdatabasetype:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: MoodleDBType
-      Description: Moodle Aurora Database Type
-      Tier: Standard
-      Type: String
-      Value: !Ref DatabaseType
-  paramdatabasewriterdns:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: MoodleDBWriterDNS
-      Description: Moodle Aurora Database Writer DNS 
-      Tier: Standard
-      Type: String
-      Value: !Ref rds.Outputs.DatabaseClusterEndpointAddress
-  paramdatabasereaderdns:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: MoodleDBReaderDNS
-      Description: Moodle Aurora Database Reader DNS 
-      Tier: Standard
-      Type: String
-      Value: !Ref rds.Outputs.DatabaseClusterReadEndpointAddress
-  paramdatabaseport:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: MoodleDBPort
-      Description: Moodle Aurora Database Port Number 
-      Tier: Standard
-      Type: String
-      Value: !Ref rds.Outputs.DatabaseClusterEndpointPort      
 Outputs:
-  DnsName:
-    Description: DNS name of the new load balancer for Moodle.
+  MoodleDomainName: 
+    Description: Moodle URL
     Value:
-      !GetAtt publicalb.Outputs.PublicAlbDnsName
+      !If [ CustomDomainName,
+            !Join [ '', [ !If [ NeedSSL, 'https://','http://'] , !Ref DomainName ] ],
+            !If [ DeployCloudFront, 
+              !Join [ '', [ !If [ NeedSSL, 'https://','http://'] , !GetAtt [ cloudfront, Outputs.DnsName ] ] ],
+              !Join [ '', [ !If [ NeedSSL, 'https://','http://'] , !GetAtt [ publicalb, Outputs.PublicAlbDnsName ] ] ]
+            ]
+          ]
+
+  DnsName: 
+    Description: AWS-generated Moodle DNS Name (use this value to configure your custom DNS CNAME, if needed)
+    Value:
+      !If [ DeployCloudFront, 
+              !GetAtt [ cloudfront, Outputs.DnsName ], 
+              !GetAtt [ publicalb, Outputs.PublicAlbDnsName ] ]
+      
+  IsMoodleSetupCompleted:
+    Description: Once Moodle installation is completed, change this parameter value to 'Yes' and run pipeline
+    Value: !Join [ '', [ 'https://',!Ref "AWS::Region", '.console.aws.amazon.com/systems-manager/parameters', 
+                  !Ref IsMoodleSetupCompletedParam, '/description?region=',!Ref "AWS::Region" ] ]
+  
+  MoodleGitRepo:
+    Description: CodeCommit git repository having Moodle source code
+    Value: 
+      !Join [ '', [ 'https://',!Ref "AWS::Region", '.console.aws.amazon.com/codesuite/codecommit/repositories/',
+              !Ref AWS::StackName, '-Repo/browse?region=',!Ref "AWS::Region" ] ]
+    
+  MoodleCodePipeline:
+    Description: Moodle Code pipeline allows you to deploy your changes
+    Value: 
+      !Join [ '', [ 'https://',!Ref "AWS::Region", '.console.aws.amazon.com/codesuite/codepipeline/pipelines/',
+              !Ref AWS::StackName, '-Pipeline/view?region=',!Ref "AWS::Region" ] ]
+
+  ApplicationCacheServerEndpoint:
+    Description: Application Cache server endpoint, use this to configure application cache endpoint in Moodle
+    Value: !If [DeployApplicationCache, !GetAtt applicationcache.Outputs.ElastiCacheClusterEndpointAddress, 'Not enabled']

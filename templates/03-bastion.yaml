@@ -34,97 +34,101 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
   BastionInstanceType:
     AllowedValues:
-    - t2.nano 
-    - t2.micro 
-    - t2.small 
-    - t2.medium 
-    - t2.large 
-    - t2.xlarge 
-    - t2.2xlarge 
-    - m3.medium 
-    - m3.large 
-    - m3.xlarge 
-    - m3.2xlarge 
-    - m4.large 
-    - m4.xlarge 
-    - m4.2xlarge 
-    - m4.4xlarge 
-    - m4.10xlarge 
-    - m4.16xlarge 
-    - m5.large 
-    - m5.xlarge 
-    - m5.2xlarge 
-    - m5.4xlarge 
-    - m5.12xlarge 
-    - m5.24xlarge 
-    - c3.large 
-    - c3.xlarge 
-    - c3.2xlarge 
-    - c3.4xlarge 
-    - c3.8xlarge 
-    - c4.large 
-    - c4.xlarge 
-    - c4.2xlarge 
-    - c4.4xlarge 
-    - c4.8xlarge 
-    - c5.large 
-    - c5.xlarge 
-    - c5.2xlarge 
-    - c5.4xlarge 
-    - c5.9xlarge 
-    - c5.18xlarge
-    - r3.large 
-    - r3.xlarge 
-    - r3.2xlarge 
-    - r3.4xlarge 
-    - r3.8xlarge 
-    - r4.large 
-    - r4.xlarge 
-    - r4.2xlarge 
-    - r4.4xlarge 
-    - r4.8xlarge 
-    - r4.16xlarge 
-    - x1.16xlarge 
-    - x1.32xlarge 
-    - x1e.xlarge 
-    - x1e.2xlarge 
-    - x1e.4xlarge 
-    - x1e.8xlarge 
-    - x1e.16xlarge 
-    - x1e.32xlarge
-    - d2.xlarge 
-    - d2.2xlarge 
-    - d2.4xlarge 
-    - d2.8xlarge 
-    - h1.2xlarge 
-    - h1.4xlarge 
-    - h1.8xlarge 
-    - h1.16xlarge 
-    - i2.xlarge 
-    - i2.2xlarge 
-    - i2.4xlarge 
-    - i2.8xlarge 
-    - i3.large 
-    - i3.xlarge 
-    - i3.2xlarge 
-    - i3.4xlarge 
-    - i3.8xlarge 
-    - i3.16xlarge
-    - f1.2xlarge 
-    - f1.16xlarge 
-    - g2.2xlarge 
-    - g2.8xlarge 
-    - g3.4xlarge 
-    - g3.8xlarge 
-    - g3.16xlarge 
-    - p2.xlarge 
-    - p2.8xlarge 
-    - p2.16xlarge 
-    - p3.2xlarge 
-    - p3.8xlarge 
-    - p3.16xlarge
+      - t3.nano 
+      - t3.micro 
+      - t3.small 
+      - t3.medium 
+      - t3.large 
+      - t3.xlarge 
+      - t3.2xlarge
+      - m5.large 
+      - m5.xlarge 
+      - m5.2xlarge 
+      - m5.4xlarge 
+      - m5.8xlarge 
+      - m5.12xlarge
+      - m5.16xlarge
+      - m5.24xlarge      
+      - c5.large 
+      - c5.xlarge 
+      - c5.2xlarge 
+      - c5.4xlarge 
+      - c5.9xlarge 
+      - c5.12xlarge
+      - c5.18xlarge  
+      - c5.24xlarge      
+      - r5.large 
+      - r5.xlarge 
+      - r5.2xlarge 
+      - r5.4xlarge 
+      - r5.8xlarge 
+      - r5.12xlarge
+      - r5.16xlarge
+      - r5.24xlarge
+      - t3a.nano 
+      - t3a.micro 
+      - t3a.small 
+      - t3a.medium 
+      - t3a.large 
+      - t3a.xlarge 
+      - t3a.2xlarge
+      - m5a.large 
+      - m5a.xlarge 
+      - m5a.2xlarge 
+      - m5a.4xlarge 
+      - m5a.8xlarge 
+      - m5a.12xlarge
+      - m5a.16xlarge
+      - m5a.24xlarge      
+      - c5a.large 
+      - c5a.xlarge 
+      - c5a.2xlarge 
+      - c5a.4xlarge 
+      - c5a.9xlarge 
+      - c5a.12xlarge
+      - c5a.18xlarge  
+      - c5a.24xlarge      
+      - r5a.large 
+      - r5a.xlarge 
+      - r5a.2xlarge 
+      - r5a.4xlarge 
+      - r5a.8xlarge 
+      - r5a.12xlarge
+      - r5a.16xlarge
+      - r5a.24xlarge
+      - t4g.nano 
+      - t4g.micro 
+      - t4g.small 
+      - t4g.medium 
+      - t4g.large 
+      - t4g.xlarge 
+      - t4g.2xlarge
+      - m6g.large 
+      - m6g.xlarge 
+      - m6g.2xlarge 
+      - m6g.4xlarge 
+      - m6g.8xlarge 
+      - m6g.12xlarge
+      - m6g.16xlarge
+      - m6g.24xlarge      
+      - c6g.large 
+      - c6g.xlarge 
+      - c6g.2xlarge 
+      - c6g.4xlarge 
+      - c6g.9xlarge 
+      - c6g.12xlarge
+      - c6g.18xlarge  
+      - c6g.24xlarge      
+      - r6g.large 
+      - r6g.xlarge 
+      - r6g.2xlarge 
+      - r6g.4xlarge 
+      - r6g.8xlarge 
+      - r6g.12xlarge
+      - r6g.16xlarge
+      - r6g.24xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: t2.nano
+    Default: t4g.nano
     Description: Bastion EC2 instance type.
     Type: String
   EC2KeyName:
@@ -132,12 +136,10 @@ Parameters:
     Type: AWS::EC2::KeyPair::KeyName
   NumberOfSubnets:
     AllowedValues:
+    - 1
     - 2
     - 3
-    - 4
-    - 5
-    - 6
-    Default: 3
+    Default: 2
     Description: Number of subnets. This must match your selections in the list of subnets below.
     Type: String 
   Subnet:
@@ -146,6 +148,9 @@ Parameters:
   LatestAmiId :
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+  LatestArmAmiId :
+    Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
     
     
 Conditions:
@@ -156,38 +161,19 @@ Conditions:
       !Equals [ 2, !Ref NumberOfSubnets ]
   NumberOfSubnets3:
       !Equals [ 3, !Ref NumberOfSubnets ]
-  NumberOfSubnets4:
-      !Equals [ 4, !Ref NumberOfSubnets ]
-  NumberOfSubnets5:
-      !Equals [ 5, !Ref NumberOfSubnets ]
-  NumberOfSubnets6:
-      !Equals [ 6, !Ref NumberOfSubnets ]
   Subnet0: !Or
     - !Condition NumberOfSubnets1
     - !Condition NumberOfSubnets2
     - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
   Subnet1: !Or
     - !Condition NumberOfSubnets2
     - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet2: !Or
-    - !Condition NumberOfSubnets3
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet3: !Or
-    - !Condition NumberOfSubnets4
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet4: !Or
-    - !Condition NumberOfSubnets5
-    - !Condition NumberOfSubnets6
-  Subnet5: !Condition NumberOfSubnets6
+  Subnet2: !Condition NumberOfSubnets3
+  UsingGraviton2Ami:  !Or
+    - !Equals ["t4",!Select [0, !Split [ "g.", !Ref BastionInstanceType]]]
+    - !Equals ["c6",!Select [0, !Split [ "g.", !Ref BastionInstanceType]]]
+    - !Equals ["m6",!Select [0, !Split [ "g.", !Ref BastionInstanceType]]]
+    - !Equals ["r6",!Select [0, !Split [ "g.", !Ref BastionInstanceType]]]
 
 
 Resources:
@@ -198,7 +184,9 @@ Resources:
       Cooldown: 60
       HealthCheckGracePeriod: 120
       HealthCheckType: EC2
-      LaunchConfigurationName: !Ref BastionLaunchConfiguration
+      LaunchTemplate:
+        LaunchTemplateId: !Ref BastionLaunchTemplate
+        Version: !GetAtt BastionLaunchTemplate.LatestVersionNumber
       MaxSize: 1
       MinSize: 0
       Tags:
@@ -212,31 +200,30 @@ Resources:
           !If
             [ NumberOfSubnets2,
             [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
-            !If
-              [ NumberOfSubnets3,
-              [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ],
-              !If
-                [ NumberOfSubnets4,
-                [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ] ],
-                !If
-                  [ NumberOfSubnets5,
-                  [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ], !Select [ 4, !Ref Subnet ] ],
-                  [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ], !Select [ 3, !Ref Subnet ], !Select [ 4, !Ref Subnet ], !Select [ 5, !Ref Subnet ] ]
-                  ]
-                ]
-              ]
+            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ]
             ]
           ]
-  BastionLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  BastionLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      IamInstanceProfile: !Ref BastionInstanceProfile
-      ImageId: !Ref LatestAmiId
-      InstanceMonitoring: true
-      InstanceType: !Ref BastionInstanceType
-      KeyName: !Ref EC2KeyName
-      SecurityGroups:
-        - !Ref BastionSecurityGroup
+      LaunchTemplateData:
+        IamInstanceProfile: 
+          Arn: !GetAtt BastionInstanceProfile.Arn
+        ImageId: !If [UsingGraviton2Ami, !Ref LatestArmAmiId, !Ref LatestAmiId]
+        Monitoring: 
+          Enabled: true
+        InstanceType: !Ref BastionInstanceType
+        KeyName: !Ref EC2KeyName
+        SecurityGroupIds:
+          - !Ref BastionSecurityGroup
+        UserData:
+            Fn::Base64:
+              !Sub |
+                #!/bin/bash -xe
+                sudo systemctl enable amazon-ssm-agent
+                sudo systemctl start amazon-ssm-agent
+                sudo systemctl status amazon-ssm-agent
+              
   BastionInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -255,6 +242,8 @@ Resources:
             - ec2.amazonaws.com
           Action:
           - sts:AssumeRole
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
       Path: '/'
       Policies:
       - PolicyName: logs

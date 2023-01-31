@@ -53,8 +53,6 @@ Resources:
     Condition: NoSslCertificate
     Properties:
       DistributionConfig:
-        Aliases:
-        - !If [ DomainName, !Ref DomainName, !Ref 'AWS::NoValue' ]
         Comment: !Ref 'AWS::StackName'
         DefaultCacheBehavior:
           AllowedMethods:
@@ -74,16 +72,20 @@ Resources:
             - '*'
             Cookies:
               Forward: all
-          TargetOriginId: elb
-          ViewerProtocolPolicy: allow-all
+          TargetOriginId: alb
+          ViewerProtocolPolicy: redirect-to-https
           Compress: true
         Enabled: true
         Origins:
         - DomainName: !Ref PublicAlbDnsName
-          Id: elb
+          Id: alb
           CustomOriginConfig:
             OriginProtocolPolicy: http-only
-        PriceClass: PriceClass_100
+        PriceClass: PriceClass_All
+        HttpVersion: http2and3
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
   CloudFrontDistributionSslCertificate:
     Type: AWS::CloudFront::Distribution
     Condition: SslCertificate
@@ -110,24 +112,23 @@ Resources:
             - '*'
             Cookies:
               Forward: all
-          TargetOriginId: elb
+          TargetOriginId: alb
           ViewerProtocolPolicy: redirect-to-https
           Compress: true
         Enabled: true
         Origins:
         - DomainName: !Ref PublicAlbDnsName
-          Id: elb
+          Id: alb
           CustomOriginConfig:
-            OriginProtocolPolicy: https-only
-        PriceClass: PriceClass_100
+            OriginProtocolPolicy: http-only
+        PriceClass: PriceClass_All
+        HttpVersion: http2and3
         ViewerCertificate:
           AcmCertificateArn: !Ref CloudFrontAcmCertificate
           SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1
+          MinimumProtocolVersion: TLSv1.2_2019
 
 Outputs:
 
-  DnsEndpoint:
+  DnsName:
     Value: !If [ NoSslCertificate, !GetAtt CloudFrontDistributionNoSslCertificate.DomainName, !GetAtt CloudFrontDistributionSslCertificate.DomainName ]
-  DnsHostname:
-    Value: !If [ NoSslCertificate, !Join [ '', [ 'http://', !GetAtt CloudFrontDistributionNoSslCertificate.DomainName ] ], !Join [ '', [ 'https://', !GetAtt CloudFrontDistributionSslCertificate.DomainName ] ] ]
