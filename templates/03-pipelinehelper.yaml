@@ -639,11 +639,11 @@ Resources:
                   if [ $(uname -a | grep -c x86_64) == "1" ]; then
                       echo "downloading x86 client for ElastiCache"
                       wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-X86-openssl3
-                      tar -xf '/tmp/latest-64bit-X86'
+                      tar -xf '/tmp/latest-64bit-X86-openssl3'
                   else 
                       echo "downloading ARM-64 client for ElastiCache"
                       wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-arm-openssl3
-                      tar -xf '/tmp/latest-64bit-arm'
+                      tar -xf '/tmp/latest-64bit-arm-openssl3'
                   fi
                   
                   cp 'amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
