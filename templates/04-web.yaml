@@ -333,6 +333,7 @@ Resources:
             - install_codedeploy
             - install_webserver
             - start_webserver
+            - add_crontab
         install_logs:
           packages:
             yum:
@@ -470,6 +471,20 @@ Resources:
               httpd:
                 enabled: true
                 ensureRunning: true
+        add_crontab:
+          files:
+            /tmp/add_crontab.sh:
+              content: !Sub |
+                  #!/bin/sh -xe
+                  echo "* * * * * apache /usr/bin/php /var/www/moodle/html/admin/cli/cron.php" > /etc/cron.d/moodle
+              mode: 000500
+              owner: root
+              group: root
+          commands:
+            add_crontab:
+              command: ./add_crontab.sh
+              cwd: /tmp
+              ignoreErrors: false
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
