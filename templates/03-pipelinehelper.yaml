@@ -634,32 +634,20 @@ Resources:
                   sudo yum install -y php-pecl-memcached
                   sudo yum remove -y php-pecl-memcached
                   sudo yum install -y php-redis
-                  
+                  sudo yum install -y openssl11
                   
                   if [ $(uname -a | grep -c x86_64) == "1" ]; then
                       echo "downloading x86 client for ElastiCache"
-                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-X86-openssl3
-                      tar -xf '/tmp/latest-64bit-X86-openssl3'
+                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-X86-openssl1.1
+                      tar -xf '/tmp/latest-64bit-X86-openssl1.1'
                   else 
                       echo "downloading ARM-64 client for ElastiCache"
-                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-arm-openssl3
-                      tar -xf '/tmp/latest-64bit-arm-openssl3'
+                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-arm-openssl1.1
+                      tar -xf '/tmp/latest-64bit-arm-openssl1.1'
                   fi
                   
                   cp 'amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
-                  if [ ! -f /etc/php.d/50-memcached.ini ]; then
-                      touch /etc/php.d/50-memcached.ini
-                  fi
-                  echo 'extension=/usr/lib64/php/modules/amazon-elasticache-cluster-client.so;' >> /etc/php.d/50-memcached.ini
-                  echo 'extension=igbinary.so;' >> /etc/php.d/50-memcached.ini
-
-                  if [ ! -f /etc/php.d/20-redis.ini ]; then
-                      touch /etc/php.d/20-redis.ini
-                  fi
-                  echo 'extension=/usr/lib64/php/modules/amazon-elasticache-cluster-client.so;' >> /etc/php.d/20-redis.ini
-                  echo 'extension=igbinary.so;' >> /etc/php.d/20-redis.ini
-                  
-                  
+                  echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
               mode: 000500
               owner: root
               group: root
