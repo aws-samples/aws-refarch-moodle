@@ -107,10 +107,10 @@ Parameters:
   
   LatestAmiId:
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
   LatestArmAmiId :
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
   
   MoodleLocale:
     Description: "The main language of the Moodle site, during initial configuration."
@@ -167,6 +167,7 @@ Conditions:
     - !Equals ["r6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
 
 Resources:
+########################### TODO put this in the codepipeline template
   MoodleRepo:
     Type: AWS::CodeCommit::Repository
     Properties:
@@ -265,9 +266,6 @@ Resources:
           moodle_git_config:
             - moodle-git-config
         moodle-git-config:
-          packages:
-            yum:
-              git: []
           files:           
             /tmp/appspec.yml:
               content: !Sub |
@@ -300,7 +298,6 @@ Resources:
                 #!/bin/bash
                 sudo systemctl start php-fpm
                 sudo systemctl start httpd
-                
               mode: '000755'
               owner: root
               group: root
@@ -457,8 +454,8 @@ Resources:
                   chown -R apache:apache /var/www/moodle/temp
                   chown -R apache:apache /var/www/moodle/local
 
-                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-                  region=${!availabilityzone:0:-1}
+                  availabilityzone=$(ec2-metadata -z | awk '{print $2}' | sed 's/(.)//')
+                  region=$(ec2-metadata -z | awk '{print $2}' | sed 's/[a-z]$//')
 
                   export EnvDatabaseType=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/Type --query Parameters[0].Value)
                   export EnvDatabaseType=`echo $EnvDatabaseType | sed -e 's/^"//' -e 's/"$//'`
@@ -494,7 +491,7 @@ Resources:
                   export EnvElastiCacheEngine=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/Cache/session/Engine --query Parameters[0].Value)
                   export EnvElastiCacheEngine=`echo $EnvElastiCacheEngine | sed -e 's/^"//' -e 's/"$//'`                  
                  
-                  #setting up elasticache dependencies for cache
+                  # Setting up ElastiCache dependencies for cache
                   if [ "$EnvIsMoodleSetupCompleted" != "No" ] && [ "$EnvElastiCacheClusterEndpointAddress" != "null" -a "$EnvElastiCacheClusterEndpointAddress" != "" ]; then
                     sed -i "s/\$SessionEndpoint = .*/\$SessionEndpoint = '"$EnvElastiCacheClusterEndpointAddress"';/" /var/www/moodle/html/config.php
 
@@ -504,154 +501,20 @@ Resources:
                       #update Moodle source to use DYNAMIC_CLIENT_MODE so Moodle can detect changes to the elasticache cluster membership
                       sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
                     fi
-
-                    
                   else
                     sed -i "s/\$SessionEndpoint = .*/\$SessionEndpoint = '';/" /var/www/moodle/html/config.php
                   fi
-                  
-                  sudo systemctl restart php-fpm
               mode: 000500
               owner: root
               group: root
-
             /tmp/before_install.sh:
               content:
                 !Sub |
                   #!/bin/bash -xe
-                  
-                  cd /opt/codedeploy-agent/deployment-root/$DEPLOYMENT_GROUP_ID/$DEPLOYMENT_ID/deployment-archive/.pipeline/
-
-                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-                  region=${!availabilityzone:0:-1}
-
-                  export EnvDatabaseType=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/DB/Type --query Parameters[0].Value)
-                  export EnvDatabaseType=`echo $EnvDatabaseType | sed -e 's/^"//' -e 's/"$//'`
-                  
-                  if [ "$EnvDatabaseType" == "MySQL" ]; then
-                    #Installing and configuring MYSQL libs.
-                    sh install_mysql_dependencies.sh
-                  else
-                    #Installing and configuring PGSQL libs.
-                    sh install_pgsql_dependencies.sh
-                  fi
-
-                  #increasing PHP max_input_vars to 5000
-                  sed -i 's/; max_input_vars.*/max_input_vars = 5000/' /etc/php.ini
-                  
-                  #Configuring OPCache
-                  sh configure_opcache.sh
-
-                  #configuring Cache clients
-                  sh install_cacheclient.sh
-
-                  # Setting up EFS shared file storage
-                  sh setup_efs.sh
+                  echo "Nothing to do"
               mode: 000500
               owner: root
               group: root
-            /tmp/setup_efs.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-
-                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-                  region=${!availabilityzone:0:-1}
-
-                  #Mount shared storage
-                  if grep -qs '/var/www/moodle/data ' /proc/mounts; then
-                    echo "/var/www/moodle/data is mounted."
-                  else
-                    export EnvElasticFileSystem=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/SharedFile/ElasticFileSystem --query Parameters[0].Value)
-                    export EnvElasticFileSystem=`echo $EnvElasticFileSystem | sed -e 's/^"//' -e 's/"$//'`
-
-                    sudo mkdir -p /$EnvElasticFileSystem
-                    sudo mountpoint -q /$EnvElasticFileSystem || sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/ /$EnvElasticFileSystem
-                                    
-                    #Create directories for Moodle
-                    sudo mkdir -p /$EnvElasticFileSystem/data
-                    sudo mkdir -p /$EnvElasticFileSystem/cache
-                    sudo mkdir -p /$EnvElasticFileSystem/temp
-
-                    chown apache:apache /$EnvElasticFileSystem/data/
-                    chown apache:apache /$EnvElasticFileSystem/cache/
-                    chown apache:apache /$EnvElasticFileSystem/temp/
-                                    
-                    sudo umount -f /$EnvElasticFileSystem
-
-                    mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/data /var/www/moodle/data
-                    #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/cache /var/www/moodle/cache
-                    #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/temp /var/www/moodle/temp
-                  fi
-              mode: 000500
-              owner: root
-              group: root
-            /tmp/install_pgsql_dependencies.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-                  amazon-linux-extras install -y postgresql13
-                  yum install -y php-pgsql
-              mode: 000500
-              owner: root
-              group: root
-            /tmp/install_mysql_dependencies.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-                  
-                  amazon-linux-extras install -y mariadb10.5
-                  yum install -y php-mysqlnd
-              mode: 000500
-              owner: root
-              group: root
-            /tmp/configure_opcache.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-                  # create hidden opcache directory locally & change owner to apache
-                  if [ ! -d /var/www/.opcache ]; then                    
-                      mkdir -p /var/www/.opcache
-                  fi
-                  #Ensure opcache is enabled and add settings recomended by moodle at https://docs.moodle.org/34/en/OPcache
-                  sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php.d/10-opcache.ini
-                  sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php.d/10-opcache.ini
-                  sed -i 's/opcache.max_accelerated_files=.*/opcache.max_accelerated_files=8000/' /etc/php.d/10-opcache.ini
-                  sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=300/' /etc/php.d/10-opcache.ini
-                  sed -i 's/;opcache.use_cwd=.*/opcache.use_cwd=1/' /etc/php.d/10-opcache.ini
-                  sed -i 's/;opcache.validate_timestamps=.*/opcache.validate_timestamps=1/' /etc/php.d/10-opcache.ini
-                  sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' /etc/php.d/10-opcache.ini
-                  sed -i 's/;opcache.enable_file_override=.*/opcache.enable_file_override=60/' /etc/php.d/10-opcache.ini
-              mode: 000500
-              owner: root
-              group: root
-            /tmp/install_cacheclient.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-                  
-                  #Install memcached and then remove it. Memcached is not actually needed. We install amazon-elasticache-cluster-client.so instead. However Moodle does not detect memcached is installed. Therefore, this tricks Moodle into thinking it is installed.
-                  sudo yum install -y php-pecl-memcached
-                  sudo yum remove -y php-pecl-memcached
-                  sudo yum install -y php-redis
-                  sudo yum install -y openssl11
-                  
-                  if [ $(uname -a | grep -c x86_64) == "1" ]; then
-                      echo "downloading x86 client for ElastiCache"
-                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-X86-openssl1.1
-                      tar -xf '/tmp/latest-64bit-X86-openssl1.1'
-                  else 
-                      echo "downloading ARM-64 client for ElastiCache"
-                      wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.0/latest-64bit-arm-openssl1.1
-                      tar -xf '/tmp/latest-64bit-arm-openssl1.1'
-                  fi
-                  
-                  cp 'amazon-elasticache-cluster-client.so' /usr/lib64/php/modules/
-                  echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
-              mode: 000500
-              owner: root
-              group: root
-
             /tmp/moodle-git-config.sh:
               content: !Sub |
                   #!/bin/bash -x
@@ -707,11 +570,11 @@ Resources:
                   git push -u origin main
 
                   # get instance id
-                  instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+                  instance_id=$(ec2-metadata -i | awk '{print $2}' | sed 's/(.)//')
 
                   # get region from instance meta-data
-                  availabilityzone=$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
-                  region=${!availabilityzone:0:-1}
+                  availabilityzone=$(ec2-metadata -z | awk '{print $2}' | sed 's/(.)//')
+                  region=$(ec2-metadata -z | awk '{print $2}' | sed 's/[a-z]$//')
 
                   # wait for Moodle setup to be completed
                   echo "Start checking whether Moodle setup completed or not"
@@ -756,7 +619,6 @@ Resources:
               command: ./moodle-git-config.sh
               cwd: /tmp
               ignoreErrors: false
-                   
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
@@ -778,7 +640,7 @@ Resources:
             #!/bin/bash -xe
             sudo systemctl enable amazon-ssm-agent
             sudo systemctl start amazon-ssm-agent
-            sudo systemctl status amazon-ssm-agent
+            dnf install -y git
 
             /opt/aws/bin/cfn-init --configsets moodle_git_config --verbose --stack ${AWS::StackName} --resource PipelineHelperLaunchTemplate --region ${AWS::Region}
             /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource PipelineHelperASGroup --region ${AWS::Region}
