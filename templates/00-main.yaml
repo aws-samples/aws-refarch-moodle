@@ -163,7 +163,7 @@ Parameters:
   DeploymentLocation:
     Description: Location to deploy from (S3 URL), Keep it as is unless you created your own S3 bucket
     Type: String
-    Default: https://s3.amazonaws.com/aws-refarch/moodle/latest/templates
+    Default: https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates
   BastionInstanceType:
     AllowedValues:
       - t3.nano 
@@ -1013,6 +1013,8 @@ Resources:
         WebSecurityGroup:
           !GetAtt [ securitygroups, Outputs.WebSecurityGroup ]
         CodeArtifactS3BucketArn: !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketArn]
+        ProjectName:
+          !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/04-web.yaml'
 
   codePipeline:
