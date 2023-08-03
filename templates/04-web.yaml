@@ -142,14 +142,18 @@ Parameters:
     Type: AWS::EC2::SecurityGroup::Id
   LatestAmiId :
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
   LatestArmAmiId :
     Type : AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-arm64-gp2
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
   CodeArtifactS3BucketArn:
     Type: "String"
     Description: Code Artifact S3 Bucket Arn
-
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: Main stack name
+    Type: String
 
 Conditions:
   NumberOfSubnets1:
@@ -335,9 +339,6 @@ Resources:
             - start_webserver
             - add_crontab
         install_logs:
-          packages:
-            yum:
-              awslogs: []
           files:
             /etc/awslogs/awslogs.conf:
               content: !Sub |
@@ -394,12 +395,8 @@ Resources:
           commands:
             01_create_state_directory:
               command: mkdir -p /var/awslogs/state
-          services:
-            sysvinit:
-              awslogsd:
-                enabled: 'true'
-                ensureRunning: 'true'
-                files: /etc/awslogs/awslogs.conf
+            02_install_cloudwatch_agent:
+              command: dnf install -y amazon-cloudwatch-agent
         install_aws_ini:
           commands:
             install_aws_ini:
@@ -407,14 +404,12 @@ Resources:
               cwd: /tmp
               ignoreErrors: true
         install_codedeploy:
-          packages:
-            yum:
-              ruby: []
           files:
             /tmp/install_codedeploy.sh:
               content:
                 !Sub |
                   #!/bin/bash -xe
+                  dnf install -y ruby
                   cd /home/ec2-user
                   wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
                   chmod +x ./install
@@ -438,13 +433,34 @@ Resources:
             /tmp/create_site_conf.sh:
               content: !Sub |
                 #!/bin/bash -xe
-                amazon-linux-extras install -y php8.0
-                amazon-linux-extras enable php8.0
+                dnf install -y php8.1 php-gd php-soap php-intl php-mbstring php-xml php-opcache php-fpm php-pgsql php-mysqlnd
 
-                yum install -y  httpd gcc-c++
-                yum install -y php-gd php-soap php-intl php-mbstring php-xml php-zip php-opcache php-sodium php-fpm
+                # Enable crontab on Amazon Linux 2023
+                dnf install -y cronie
+                systemctl enable crond
+                systemctl start crond
 
+                # Below to be able to compile zip.so for the PHP Zip library that's not in the available packages...
+                dnf install -y php8.1-devel php-pear libzip libzip-devel
+                pecl install zip
+                echo "extension=zip.so;" > /etc/php.d/50-zip.ini
+
+                # Install Sodium
+                dnf install -y gcc
+                wget https://download.libsodium.org/libsodium/releases/LATEST.tar.gz
+                tar -xvzf LATEST.tar.gz
+                cd libsodium-stable
+                ./configure
+                make
+                make install
+                pecl install -f libsodium
+                echo "extension=sodium.so;" > /etc/php.d/50-sodium.ini
+
+                # Adjust base php.ini
                 sed -i 's/memory_limit =.*/memory_limit = 4096M/' /etc/php.ini
+                sed -i 's/;max_input_vars.*/max_input_vars = 5000/' /etc/php.ini
+
+                # Create Apache config
                 if [ ! -f /etc/httpd/conf.d/moodle.conf ]; then                    
                    touch /etc/httpd/conf.d/moodle.conf
                    echo 'ServerName 127.0.0.1:80' >> /etc/httpd/conf.d/moodle.conf
@@ -454,6 +470,62 @@ Resources:
                    echo '  AllowOverride All' >> /etc/httpd/conf.d/moodle.conf
                    echo '  Require all granted' >> /etc/httpd/conf.d/moodle.conf
                    echo '</Directory>' >> /etc/httpd/conf.d/moodle.conf
+                fi
+
+                # Create hidden opcache directory locally & change owner to apache
+                if [ ! -d /var/www/.opcache ]; then                    
+                    mkdir -p /var/www/.opcache
+                fi
+                # Ensure opcache is enabled and add settings recomended by moodle at https://docs.moodle.org/34/en/OPcache
+                sed -i 's/;opcache.file_cache=.*/opcache.file_cache=\/var\/www\/.opcache/' /etc/php.d/10-opcache.ini
+                sed -i 's/opcache.memory_consumption=.*/opcache.memory_consumption=512/' /etc/php.d/10-opcache.ini
+                sed -i 's/opcache.max_accelerated_files=.*/opcache.max_accelerated_files=8000/' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.revalidate_freq=.*/opcache.revalidate_freq=300/' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.use_cwd=.*/opcache.use_cwd=1/' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.validate_timestamps=.*/opcache.validate_timestamps=1/' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.enable_file_override=.*/opcache.enable_file_override=60/' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.file_cache_only=.*/opcache.file_cache_only=1/' /etc/php.d/10-opcache.ini
+
+                # Install ElastiCache client
+                if [ $(uname -a | grep -c x86_64) == "1" ]; then
+                    echo "downloading x86 client for ElastiCache"
+                    wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.1/latest-64bit-X86-openssl3
+                    tar -xf '/tmp/latest-64bit-X86-openssl3'
+                else 
+                    echo "downloading ARM-64 client for ElastiCache"
+                    wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.2/latest-64bit-arm-X86-openssl3
+                    tar -xf '/tmp/latest-64bit-arm-X86-openssl3'
+                fi
+                mv amazon-elasticache-cluster-client.so /usr/lib64/php/modules/
+                echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
+
+                # Mount EFS
+                availabilityzone=$(ec2-metadata -z | awk '{print $2}' | sed 's/(.)//')
+                region=$(ec2-metadata -z | awk '{print $2}' | sed 's/[a-z]$//')
+                if grep -qs '/var/www/moodle/data ' /proc/mounts; then
+                  echo "/var/www/moodle/data is mounted."
+                else
+                  export EnvElasticFileSystem=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/SharedFile/ElasticFileSystem --query Parameters[0].Value)
+                  export EnvElasticFileSystem=`echo $EnvElasticFileSystem | sed -e 's/^"//' -e 's/"$//'`
+
+                  sudo mkdir -p /$EnvElasticFileSystem
+                  sudo mountpoint -q /$EnvElasticFileSystem || sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/ /$EnvElasticFileSystem
+                                  
+                  #Create directories for Moodle
+                  sudo mkdir -p /$EnvElasticFileSystem/data
+                  sudo mkdir -p /$EnvElasticFileSystem/cache
+                  sudo mkdir -p /$EnvElasticFileSystem/temp
+
+                  chown apache:apache /$EnvElasticFileSystem/data/
+                  chown apache:apache /$EnvElasticFileSystem/cache/
+                  chown apache:apache /$EnvElasticFileSystem/temp/
+                                  
+                  sudo umount -f /$EnvElasticFileSystem
+
+                  mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/data /var/www/moodle/data
+                  #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/cache /var/www/moodle/cache
+                  #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/temp /var/www/moodle/temp
                 fi
 
                 cp /tmp/status.txt /var/www/moodle/html/status.txt
@@ -476,7 +548,7 @@ Resources:
             /tmp/add_crontab.sh:
               content: !Sub |
                   #!/bin/sh -xe
-                  echo "* * * * * apache /usr/bin/php /var/www/moodle/html/admin/cli/cron.php" > /etc/cron.d/moodle
+                  echo "* * * * * apache /usr/bin/php /var/www/moodle/html/admin/cli/cron.php" >> /etc/cron.d/moodle
               mode: 000500
               owner: root
               group: root
@@ -508,9 +580,6 @@ Resources:
               #!/bin/bash -xe
               sudo systemctl enable amazon-ssm-agent
               sudo systemctl start amazon-ssm-agent
-              sudo systemctl status amazon-ssm-agent
-              
-              yum update -y
               
               #Create directory structure
               mkdir -p /var/www/moodle/html
