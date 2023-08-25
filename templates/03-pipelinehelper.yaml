@@ -533,7 +533,7 @@ Resources:
                     mkdir /tmp/moodle/.pipeline
 
                     # Get Latest Moodle stable version
-                    wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable401/moodle-latest-401.tgz
+                    wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/direct/stable402/moodle-latest-402.tgz
                     tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /tmp/moodle/
                     wget -O /tmp/moodle/lib/aws.phar https://docs.aws.amazon.com/aws-sdk-php/v3/download/aws.phar
                     cd /tmp/moodle
