@@ -459,6 +459,8 @@ Resources:
                 # Adjust base php.ini
                 sed -i 's/memory_limit =.*/memory_limit = 4096M/' /etc/php.ini
                 sed -i 's/;max_input_vars.*/max_input_vars = 5000/' /etc/php.ini
+		sed -i 's/upload_max_filesize =.*/upload_max_filesize = 1000M/' /etc/php.ini
+                sed -i 's/post_max_size =.*/post_max_size = 1000M/' /etc/php.ini
 
                 # Create Apache config
                 if [ ! -f /etc/httpd/conf.d/moodle.conf ]; then                    
