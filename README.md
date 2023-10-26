@@ -4,17 +4,17 @@
 
 ## Overview
 
-This repository provides set of CloudFormation nested templates that deploy a highly available, elastic, and scalable [Moodle™ 4.2.2+](https://docs.moodle.org) environment on AWS. Moodle™ offers a learning platform that provides educators, administrators and learners a single robust, secure and integrated system for personalized learning environment. 
+This repository provides set of CloudFormation nested templates that deploy a highly available, elastic, and scalable [Moodle™ 4.3+](https://docs.moodle.org) environment on AWS. Moodle™ offers a learning platform that provides educators, administrators and learners a single robust, secure and integrated system for personalized learning environment. 
 
 These nested templates can be used to deploy Moodle™ on AWS using [Amazon Virtual Private Cloud (Amazon VPC)](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Introduction.html), [Amazon Elastic Compute Cloud (Amazon EC2)](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html), [Auto Scaling](http://docs.aws.amazon.com/autoscaling/latest/userguide/WhatIsAutoScaling.html), [Elastic Load Balancing (Application Load Balancer)](http://docs.aws.amazon.com/elasticbalancing/latest/application/introduction.html), [Amazon Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_AuroraOverview.html), [Amazon ElastiCache](http://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/WhatIs.html), [Amazon Elastic File System (Amazon EFS)](http://docs.aws.amazon.com/efs/latest/ug/whatisefs.html), [Amazon CloudFront](http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html), [Amazon Route 53](http://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html), [Amazon Certificate Manager (Amazon ACM)](http://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html)  with [AWS CloudFormation](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) in yaml format. 
 
 This architecture is expansive enough to meet the needs of large institutions / organizations. Smaller organizations can choose to run a subset of the template to meet their needs. These templates can also be run individually and may be modified.
 
-This template currently uses [Moodle™ 4.2.2+](https://download.moodle.org/download.php/stable402/moodle-latest-402.tgz) stable version downloaded directly from [download.moodle.org](https://download.moodle.org/releases/latest/). Details for downloading are available in the [templates/03-pipelinehelper.yaml](templates/03-pipelinehelper.yaml) template file.
+This template currently uses [Moodle™ 4.3+](https://download.moodle.org/download.php/stable403/moodle-latest-403.tgz) stable version downloaded directly from [download.moodle.org](https://download.moodle.org/releases/latest/). Details for downloading are available in the [templates/03-pipelinehelper.yaml](templates/03-pipelinehelper.yaml) template file.
 
 ## Deployment guide
 
-Read the [reference architecture](#architecture) and the steps below to understand the deployment scope and options. While following the steps and guidelines to deploy Moodle™ 4.x, pay careful attention to the parameters and their descriptions.
+Read the [reference architecture](#architecture) and the steps below to understand the deployment scope and options. While following the steps and guidelines to deploy Moodle™, pay careful attention to the parameters and their descriptions.
 
 ### Pre-requisites
 1) Select an [AWS Region](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/using-regions-availability-zones.html#concepts-available-regions) (for example: us-east-1) for your deployment.
@@ -94,7 +94,7 @@ With [elastic](https://docs.aws.amazon.com/efs/latest/ug/performance.html#elasti
 *Moodle™ recommends the `dirroot` be set as read only for the apache process in a clustered environment [[Reference]](https://docs.moodle.org/400/en/Server_cluster#.24CFG-.3Edirroot). You should not install plugins to a server cluster from the admin page. `Moodle™ recommends manually installing plugins on each server during planned maintenance`. To follow the infrastructure-as-code methodology, installation/upgrade of plugins can be managed using AWS CodePipeline scripts. See the `.pipeline` folder inside your AWS CodeCommit Moodle™ repository.
 
 ### AWS CodePipeline
-This CloudFormation templates use AWS Services to create a CI/CD pipeline to help manage your Moodle™ environment. AWS CodeCommit will host a git repository for your Moodle™ environment. It initially pulls the source from [download.moodle.org.](https://download.moodle.org/download.php/stable402/moodle-4.0.2.tgz). It also adds files required to automate the deployment pipeline. You can explore these files under the `.pipeline` folder.
+This CloudFormation templates use AWS Services to create a CI/CD pipeline to help manage your Moodle™ environment. AWS CodeCommit will host a git repository for your Moodle™ environment. It initially pulls the source from [download.moodle.org.](https://download.moodle.org/download.php/stable403/moodle-4.0.3.tgz). It also adds files required to automate the deployment pipeline. You can explore these files under the `.pipeline` folder.
 This template also creates an AWS CodePipeline configuration that build artifacts to deploy on EC2 with autoscaling groups using AWS CodeBuild and AWS CodeDeploy. It can optionally support a BLUE_GREEN deployment.
 
 *You can customize the overall pipeline for your Moodle™ setup.*
