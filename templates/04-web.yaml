@@ -456,6 +456,22 @@ Resources:
                 pecl install -f libsodium
                 echo "extension=sodium.so;" > /etc/php.d/50-sodium.ini
 
+                # Install Redis client as well as related extensions - see here https://github.com/amazonlinux/amazon-linux-2023/issues/328
+                pear update-channels
+                pecl update-channels
+                /usr/bin/yes 'no' | pecl install igbinary
+                echo 'extension=igbinary.so' > /etc/php.d/30-igbinary.ini
+                /usr/bin/yes 'no' | pecl install msgpack
+                echo 'extension=msgpack.so' > /etc/php.d/30-msgpack.ini
+                dnf install -q -y libzstd-devel
+                /usr/bin/yes 'no' | pecl install zstd
+                echo 'extension=zstd.so' > /etc/php.d/40-zstd.ini
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-lzf-better-compression="no"' lzf
+                echo 'extension=lzf.so' > /etc/php.d/40-lzf.ini
+                dnf install -q -y redis6-devel lz4-devel
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-redis-igbinary="yes" enable-redis-lzf="yes" enable-redis-zstd="yes" enable-redis-msgpack="yes" enable-redis-lz4="yes" with-liblz4="yes"' redis
+                echo 'extension=redis.so' > /etc/php.d/41-redis.ini
+
                 # Adjust base php.ini
                 sed -i 's/memory_limit =.*/memory_limit = 4096M/' /etc/php.ini
                 sed -i 's/;max_input_vars.*/max_input_vars = 5000/' /etc/php.ini
@@ -484,21 +500,24 @@ Resources:
                 sed -i 's/;opcache.use_cwd=.*/opcache.use_cwd=1/' /etc/php.d/10-opcache.ini
                 sed -i 's/;opcache.validate_timestamps=.*/opcache.validate_timestamps=1/' /etc/php.d/10-opcache.ini
                 sed -i 's/;opcache.save_comments=.*/opcache.save_comments=1/' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.enable_file_override=.*/opcache.enable_file_override=60/' /etc/php.d/10-opcache.ini
                 sed -i 's/;opcache.file_cache_only=.*/opcache.file_cache_only=1/' /etc/php.d/10-opcache.ini
 
                 # Install ElastiCache client
-                if [ $(uname -a | grep -c x86_64) == "1" ]; then
-                    echo "downloading x86 client for ElastiCache"
-                    wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.1/latest-64bit-X86-openssl3
-                    tar -xf '/tmp/latest-64bit-X86-openssl3'
-                else 
-                    echo "downloading ARM-64 client for ElastiCache"
-                    wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.2/latest-64bit-arm-X86-openssl3
-                    tar -xf '/tmp/latest-64bit-arm-X86-openssl3'
-                fi
-                mv amazon-elasticache-cluster-client.so /usr/lib64/php/modules/
-                echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
+                #if [ $(uname -a | grep -c x86_64) == "1" ]; then
+                #    echo "downloading x86 client for ElastiCache"
+                #    wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.1/latest-64bit-X86-openssl3
+                #    tar -xf '/tmp/latest-64bit-X86-openssl3'
+                #else 
+                #    echo "downloading ARM-64 client for ElastiCache"
+                #    wget -P /tmp/ https://elasticache-downloads.s3.amazonaws.com/ClusterClient/PHP-8.2/latest-64bit-arm-X86-openssl3
+                #    tar -xf '/tmp/latest-64bit-arm-X86-openssl3'
+                #fi
+                #mv amazon-elasticache-cluster-client.so /usr/lib64/php/modules/
+                #echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
+                # Install Memcached client - note that ElastiCache client is failing on AL2023
+                dnf install libmemcached libmemcached-devel -y -q
+                /usr/bin/yes 'no' | pecl install memcached
+                echo 'extension=memcached.so' > /etc/php.d/41-memcached.ini
 
                 # Mount EFS
                 availabilityzone=$(ec2-metadata -z | awk '{print $2}' | sed 's/(.)//')

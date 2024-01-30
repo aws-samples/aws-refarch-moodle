@@ -177,8 +177,7 @@ Resources:
   #This bucket is being used for storing Code artifacts for deployment.
   CodeArtifactS3Bucket:
     Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Join ['-', [!Sub 'moodle-code', !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]]]
+    DeletionPolicy: RetainExceptOnCreate
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -486,7 +485,7 @@ Resources:
                   export EnvIsMoodleSetupCompleted=`echo $EnvIsMoodleSetupCompleted | sed -e 's/^"//' -e 's/"$//'` 
 
                   export EnvElastiCacheClusterEndpointAddress=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/Cache/session/ElastiCacheClusterEndpoint --query Parameters[0].Value)
-                  export EnvElastiCacheClusterEndpointAddress=`echo $EnvElastiCacheClusterEndpointAddress | sed -e 's/^"//' -e 's/"$//'`                  
+                  export EnvElastiCacheClusterEndpointAddress=`echo $EnvElastiCacheClusterEndpointAddress | sed -e 's/^"//' -e 's/"$//' | cut -f1 -d":"`                  
                   
                   export EnvElastiCacheEngine=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/Cache/session/Engine --query Parameters[0].Value)
                   export EnvElastiCacheEngine=`echo $EnvElastiCacheEngine | sed -e 's/^"//' -e 's/"$//'`                  
@@ -495,11 +494,12 @@ Resources:
                   if [ "$EnvIsMoodleSetupCompleted" != "No" ] && [ "$EnvElastiCacheClusterEndpointAddress" != "null" -a "$EnvElastiCacheClusterEndpointAddress" != "" ]; then
                     sed -i "s/\$SessionEndpoint = .*/\$SessionEndpoint = '"$EnvElastiCacheClusterEndpointAddress"';/" /var/www/moodle/html/config.php
 
-                    if [ "$EnvElastiCacheEngine" == "Redis"]; then
+                    if [ "$EnvElastiCacheEngine" == "Redis" ]; then
                       sed -i "s/\$SessionsCacheType = .*/\$SessionsCacheType = '"$EnvElastiCacheEngine"';/" /var/www/moodle/html/config.php
-                    else
+                    #else
+                    # Below commented out because we don't use the ElastiCache client anymore
                       #update Moodle source to use DYNAMIC_CLIENT_MODE so Moodle can detect changes to the elasticache cluster membership
-                      sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
+                      #sed -i '/\$this->options\[Memcached::OPT_BUFFER_WRITES\] = \$bufferwrites;/a \ \ \ \ \ \ \ \ $this->options[Memcached::OPT_CLIENT_MODE] = Memcached::DYNAMIC_CLIENT_MODE;' /var/www/moodle/html/cache/stores/memcached/lib.php
                     fi
                   else
                     sed -i "s/\$SessionEndpoint = .*/\$SessionEndpoint = '';/" /var/www/moodle/html/config.php
