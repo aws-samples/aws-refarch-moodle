@@ -446,13 +446,7 @@ Resources:
                 echo "extension=zip.so;" > /etc/php.d/50-zip.ini
 
                 # Install Sodium
-                dnf install -y gcc
-                wget https://download.libsodium.org/libsodium/releases/LATEST.tar.gz
-                tar -xvzf LATEST.tar.gz
-                cd libsodium-stable
-                ./configure
-                make
-                make install
+                dnf install -y libsodium-devel
                 pecl install -f libsodium
                 echo "extension=sodium.so;" > /etc/php.d/50-sodium.ini
 
