@@ -511,7 +511,7 @@ Resources:
                 # Install Memcached client - note that ElastiCache client is failing on AL2023
                 dnf install libmemcached libmemcached-devel -y -q
                 dnf install -y zlib-devel cyrus-sasl-devel libevent-devel
-                /use/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' memcached
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' memcached
                 echo 'extension=memcached.so' > /etc/php.d/41-memcached.ini
 
                 # Mount EFS
