@@ -446,13 +446,7 @@ Resources:
                 echo "extension=zip.so;" > /etc/php.d/50-zip.ini
 
                 # Install Sodium
-                dnf install -y gcc
-                wget https://download.libsodium.org/libsodium/releases/LATEST.tar.gz
-                tar -xvzf LATEST.tar.gz
-                cd libsodium-stable
-                ./configure
-                make
-                make install
+                dnf install -y libsodium-devel
                 pecl install -f libsodium
                 echo "extension=sodium.so;" > /etc/php.d/50-sodium.ini
 
@@ -516,7 +510,8 @@ Resources:
                 #echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
                 # Install Memcached client - note that ElastiCache client is failing on AL2023
                 dnf install libmemcached libmemcached-devel -y -q
-                /usr/bin/yes 'no' | pecl install memcached
+                dnf install -y zlib-devel cyrus-sasl-devel libevent-devel
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' memcached
                 echo 'extension=memcached.so' > /etc/php.d/41-memcached.ini
 
                 # Mount EFS
