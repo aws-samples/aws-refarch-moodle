@@ -333,12 +333,43 @@ Resources:
       AWS::CloudFormation::Init:
         configSets:
           deploy_webserver:
-            - install_logs
+            - install_packages
+            - install_cloudwatchlogs
             - install_codedeploy
             - install_webserver
-            - start_webserver
+            - start_services
             - add_crontab
-        install_logs:
+        install_packages:
+          packages:
+            yum:
+              amazon-cloudwatch-agent: []
+              ruby3.2: []
+              httpd: []
+              php8.1: []
+              php8.1-gd: []
+              php8.1-soap: []
+              php8.1-intl: []
+              php8.1-mbstring: []
+              php8.1-xml: []
+              php8.1-opcache: []
+              php8.1-fpm: []
+              php8.1-pgsql: []
+              php8.1-mysqlnd: []
+              cronie: []
+              php8.1-devel: []
+              php-pear: []
+              libzip: []
+              libzip-devel: []
+              libsodium-devel: []
+              libzstd-devel: []
+              redis6-devel: []
+              lz4-devel: []
+              libmemcached-awesome-tools: []
+              libmemcached-awesome-devel: []
+              zlib-devel: []
+              cyrus-sasl-devel: []
+              libevent-devel: []
+        install_cloudwatchlogs:
           files:
             /etc/awslogs/awslogs.conf:
               content: !Sub |
@@ -393,35 +424,17 @@ Resources:
               owner: root
               group: root
           commands:
-            01_create_state_directory:
+            create_state_directory:
               command: mkdir -p /var/awslogs/state
-            02_install_cloudwatch_agent:
-              command: dnf install -y amazon-cloudwatch-agent
-        install_aws_ini:
-          commands:
-            install_aws_ini:
-              command: ./download_aws_ini.sh
-              cwd: /tmp
-              ignoreErrors: true
         install_codedeploy:
           files:
-            /tmp/install_codedeploy.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-                  dnf install -y ruby
-                  cd /home/ec2-user
-                  wget https://aws-codedeploy-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/latest/install
-                  chmod +x ./install
-                  ./install auto
-              mode: 000500
-              owner: root
-              group: root
+            /home/ec2-user/install:
+              source: !Join ["", ["https://aws-codedeploy-", !Ref "AWS::Region", ".s3.", !Ref "AWS::Region", ".amazonaws.com/latest/install" ] ]
+              mode: "000755"
           commands:
             install_codedeploy:
-              command: ./install_codedeploy.sh
-              cwd: /tmp
-              ignoreErrors: false              
+              command: "./install auto"
+              cwd: "/home/ec2-user/"
         install_webserver:
           files:
             /tmp/status.txt:
@@ -433,20 +446,12 @@ Resources:
             /tmp/create_site_conf.sh:
               content: !Sub |
                 #!/bin/bash -xe
-                dnf install -y php8.1 php-gd php-soap php-intl php-mbstring php-xml php-opcache php-fpm php-pgsql php-mysqlnd
-
-                # Enable crontab on Amazon Linux 2023
-                dnf install -y cronie
-                systemctl enable crond
-                systemctl start crond
 
                 # Below to be able to compile zip.so for the PHP Zip library that's not in the available packages...
-                dnf install -y php8.1-devel php-pear libzip libzip-devel
                 pecl install zip
                 echo "extension=zip.so;" > /etc/php.d/50-zip.ini
 
                 # Install Sodium
-                dnf install -y libsodium-devel
                 pecl install -f libsodium
                 echo "extension=sodium.so;" > /etc/php.d/50-sodium.ini
 
@@ -457,12 +462,10 @@ Resources:
                 echo 'extension=igbinary.so' > /etc/php.d/30-igbinary.ini
                 /usr/bin/yes 'no' | pecl install msgpack
                 echo 'extension=msgpack.so' > /etc/php.d/30-msgpack.ini
-                dnf install -q -y libzstd-devel
                 /usr/bin/yes 'no' | pecl install zstd
                 echo 'extension=zstd.so' > /etc/php.d/40-zstd.ini
                 /usr/bin/yes 'no' | pecl install --configureoptions 'enable-lzf-better-compression="no"' lzf
                 echo 'extension=lzf.so' > /etc/php.d/40-lzf.ini
-                dnf install -q -y redis6-devel lz4-devel
                 /usr/bin/yes 'no' | pecl install --configureoptions 'enable-redis-igbinary="yes" enable-redis-lzf="yes" enable-redis-zstd="yes" enable-redis-msgpack="yes" enable-redis-lz4="yes" with-liblz4="yes"' redis
                 echo 'extension=redis.so' > /etc/php.d/41-redis.ini
 
@@ -509,8 +512,6 @@ Resources:
                 #mv amazon-elasticache-cluster-client.so /usr/lib64/php/modules/
                 #echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
                 # Install Memcached client - note that ElastiCache client is failing on AL2023
-                dnf install libmemcached libmemcached-devel -y -q
-                dnf install -y zlib-devel cyrus-sasl-devel libevent-devel
                 /usr/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' memcached
                 echo 'extension=memcached.so' > /etc/php.d/41-memcached.ini
 
@@ -550,11 +551,13 @@ Resources:
             create_site_conf:
               command: ./create_site_conf.sh
               cwd: /tmp
-              ignoreErrors: false
-        start_webserver:
+        start_services:
           services:
             sysvinit:
               httpd:
+                enabled: true
+                ensureRunning: true
+              crond:
                 enabled: true
                 ensureRunning: true
         add_crontab:
@@ -570,7 +573,6 @@ Resources:
             add_crontab:
               command: ./add_crontab.sh
               cwd: /tmp
-              ignoreErrors: false
     Properties:
       LaunchTemplateData:
         BlockDeviceMappings:
