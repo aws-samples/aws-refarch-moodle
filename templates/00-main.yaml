@@ -660,6 +660,10 @@ Parameters:
     Description: Email address for notification
     Type: String
     Default: hello@yourdomain.com
+  MoodleDirectDownloadURL:
+    Default: "https://download.moodle.org/download.php/direct/stable404/moodle-4.4.tgz"
+    Description: Specifies the TGZ Moodle direct download URL
+    Type: String
 
 Conditions:
   DeployWithoutSessionCache: 
@@ -947,6 +951,8 @@ Resources:
           !Ref WebAsgMax
         WebAsgMin: 
           !Ref WebAsgMin
+        MoodleDirectDownloadURL:
+          !Ref MoodleDirectDownloadURL
       TemplateURL: !Sub '${DeploymentLocation}/03-pipelinehelper.yaml'
 
   sessioncache:
