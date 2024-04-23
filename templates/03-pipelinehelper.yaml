@@ -144,6 +144,10 @@ Parameters:
     Default: 2
     Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
     Type: String
+  MoodleDirectDownloadURL:
+    Default: "https://download.moodle.org/download.php/direct/stable404/moodle-4.4.tgz"
+    Description: Specifies the TGZ Moodle direct download URL
+    Type: String
 
 Conditions:
   NumberOfSubnets1:
@@ -533,7 +537,7 @@ Resources:
                     mkdir /tmp/moodle/.pipeline
 
                     # Get Latest Moodle stable version
-                    wget -O /tmp/moodle.tgz https://download.moodle.org/download.php/stable404/moodle-4.4.tgz
+                    wget -O /tmp/moodle.tgz ${MoodleDirectDownloadURL}
                     tar -xvzf /tmp/moodle.tgz --strip-components=1 -C /tmp/moodle/
                     wget -O /tmp/moodle/lib/aws.phar https://docs.aws.amazon.com/aws-sdk-php/v3/download/aws.phar
                     cd /tmp/moodle
