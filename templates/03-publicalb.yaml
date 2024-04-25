@@ -1,30 +1,6 @@
 
 AWSTemplateFormatVersion: 2010-09-09
-
-Description: Reference Architecture to host Moodle on AWS - Creates Application Load Balancer
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-    - Label:
-        default: ALB Parameters
-      Parameters:
-        - Vpc
-        - PublicAlbAcmCertificate
-        - PublicAlbSecurityGroup
-        - NumberOfSubnets
-        - Subnet
-    ParameterLabels:
-      Vpc:
-        default: Vpc Id
-      PublicAlbAcmCertificate:
-        default: ALB Certificate ARN
-      PublicAlbSecurityGroup:
-        default: Public ALB Security Group
-      NumberOfSubnets:
-        default: Number of subnets
-      Subnet:
-        default: Subnets
+Description: Moodle Application Load Balancer
 
 Parameters:
   NumberOfSubnets:
@@ -55,29 +31,63 @@ Parameters:
     Type: String
 
 Conditions:
+  SslCertificate: !Not [!Equals [ '', !Ref PublicAlbAcmCertificate ] ]
+  NoSslCertificate: !Equals [ '', !Ref PublicAlbAcmCertificate ]
+  NumberOfSubnets1: !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2: !Equals [ 2, !Ref NumberOfSubnets ]
 
-  SslCertificate:
-    !Not [!Equals [ '', !Ref PublicAlbAcmCertificate ] ]
-  NoSslCertificate:
-    !Equals [ '', !Ref PublicAlbAcmCertificate ]
-  NumberOfSubnets1:
-      !Equals [ 1, !Ref NumberOfSubnets ]
-  NumberOfSubnets2:
-      !Equals [ 2, !Ref NumberOfSubnets ]
-  NumberOfSubnets3:
-      !Equals [ 3, !Ref NumberOfSubnets ]
-  Subnet0: !Or
-    - !Condition NumberOfSubnets1
-    - !Condition NumberOfSubnets2
-    - !Condition NumberOfSubnets3
-  Subnet1: !Or
-    - !Condition NumberOfSubnets2
-    - !Condition NumberOfSubnets3
-  Subnet2: !Condition NumberOfSubnets3
+Mappings: 
+  # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
+  RegionMap: 
+    us-east-1: 
+      "ELBAccountID": "127311923021"
+    us-east-2: 
+      "ELBAccountID": "033677994240"
+    us-west-1: 
+      "ELBAccountID": "027434742980"
+    us-west-2: 
+      "ELBAccountID": "797873946194"
+    af-south-1: 
+      "ELBAccountID": "098369216593"
+    ap-east-1: 
+      "ELBAccountID": "754344448648"
+    ap-southeast-3: 
+      "ELBAccountID": "589379963580"
+    ap-south-1: 
+      "ELBAccountID": "718504428378"
+    ap-northeast-3: 
+      "ELBAccountID": "383597477331"
+    ap-northeast-2: 
+      "ELBAccountID": "600734575887"
+    ap-southeast-1: 
+      "ELBAccountID": "114774131450"
+    ap-southeast-2: 
+      "ELBAccountID": "783225319266"
+    ap-northeast-1: 
+      "ELBAccountID": "582318560864"
+    ca-central-1: 
+      "ELBAccountID": "985666609251"
+    eu-central-1: 
+      "ELBAccountID": "054676820928"
+    eu-west-1: 
+      "ELBAccountID": "156460612806"
+    eu-west-2: 
+      "ELBAccountID": "652711504416"
+    eu-south-1: 
+      "ELBAccountID": "635631232127"
+    eu-west-3: 
+      "ELBAccountID": "009996457667"
+    eu-north-1: 
+      "ELBAccountID": "897822967062"
+    me-south-1: 
+      "ELBAccountID": "076674570225"
+    sa-east-1: 
+      "ELBAccountID": "507241528517"
 
 Resources:
   PublicAlbListenerNoSslCertificate:
     Type : AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: LoadBalancerAccessLogsBucketPolicy
     Properties:
       DefaultActions:
       - Type: forward
@@ -89,6 +99,7 @@ Resources:
   PublicAlbListenerSslCertificate:
     Condition: SslCertificate
     Type : AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: LoadBalancerAccessLogsBucketPolicy
     Properties:
       Certificates:
       - CertificateArn: !Ref PublicAlbAcmCertificate
@@ -98,29 +109,66 @@ Resources:
       LoadBalancerArn: !Ref PublicApplicationLoadBalancer
       Port: 443
       Protocol: HTTPS
+      SslPolicy: "ELBSecurityPolicy-TLS13-1-2-2021-06"
+
+  LoadBalancerAccessLogsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+        - Id: DeleteOldLogs
+          Status: Enabled
+          ExpirationInDays: 7
+
+  LoadBalancerAccessLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoadBalancerAccessLogsBucket
+      PolicyDocument:
+        Statement:
+        - Action:
+          - s3:PutObject
+          Effect: Allow
+          Resource: !Join [ "", [ !GetAtt LoadBalancerAccessLogsBucket.Arn, "/*" ] ]
+          Principal:
+            Service: logdelivery.elasticloadbalancing.amazonaws.com
+        # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
+        - Action:
+          - s3:PutObject
+          Effect: Allow
+          Resource: !Join [ "", [ !GetAtt LoadBalancerAccessLogsBucket.Arn, "/*" ] ]
+          Principal:
+            AWS: !Join [ "", [ "arn:aws:iam::", !FindInMap [RegionMap, !Ref "AWS::Region", ELBAccountID], ":root" ] ]
 
   PublicApplicationLoadBalancer: 
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet-facing
-      Subnets:
-        !If
-          [ NumberOfSubnets1,
-          [ !Select [ 0, !Ref Subnet ] ],
-          !If
-            [ NumberOfSubnets2,
-            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
-            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ]
-            ]
-          ]
+      Subnets: !If [ NumberOfSubnets1, [ !Select [ 0, !Ref Subnet ] ],
+        !If [ NumberOfSubnets2, [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
+        [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ] ] ]
       LoadBalancerAttributes:
       - Key: idle_timeout.timeout_seconds
         Value: '60'
+      - Key: access_logs.s3.enabled
+        Value: true
+      - Key: access_logs.s3.bucket
+        Value: !Ref LoadBalancerAccessLogsBucket
+      - Key: access_logs.s3.prefix
+        Value: !Join [ '', [ !Ref ProjectName, '-publicalb' ] ]
       SecurityGroups:
       - !Ref PublicAlbSecurityGroup
-      Tags:
-      - Key: Name
-        Value: !Join [ '-', [ 'Moodle',!Ref ProjectName,'alb'  ] ]
+
   PublicAlbTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -130,34 +178,23 @@ Resources:
       Name: !Join [ '', [ 'PublicALB-', !Ref Vpc ] ]
       Port: 80
       Protocol: HTTP
-      Tags:
-      - Key: Name
-        Value: !Join [ '-', [ 'Moodle',!Ref ProjectName,'alb-TG'  ] ]
       UnhealthyThresholdCount: 5
       VpcId: !Ref Vpc
 
 Outputs:
   PublicAlbTargetGroupArn:
-    Value:
-      !Ref PublicAlbTargetGroup
+    Value: !Ref PublicAlbTargetGroup
   PublicAlbTargetGroupName:
-    Value:
-      !GetAtt PublicAlbTargetGroup.TargetGroupName
+    Value: !GetAtt PublicAlbTargetGroup.TargetGroupName
   PublicAlbCanonicalHostedZoneId:
-    Value:
-      !GetAtt PublicApplicationLoadBalancer.CanonicalHostedZoneID
+    Value: !GetAtt PublicApplicationLoadBalancer.CanonicalHostedZoneID
   PublicAlbDnsName:
-    Value:
-      !GetAtt PublicApplicationLoadBalancer.DNSName
+    Value: !GetAtt PublicApplicationLoadBalancer.DNSName
   PublicAlbFullName:
-    Value:
-      !GetAtt PublicApplicationLoadBalancer.LoadBalancerFullName
+    Value: !GetAtt PublicApplicationLoadBalancer.LoadBalancerFullName
   PublicAlbName:
-    Value:
-      !GetAtt PublicApplicationLoadBalancer.LoadBalancerName
+    Value: !GetAtt PublicApplicationLoadBalancer.LoadBalancerName
   PublicAlbHostname:
-    Value:
-      !If [ NoSslCertificate, !Join [ '', [ 'http://', !GetAtt PublicApplicationLoadBalancer.DNSName ] ], !Join [ '', [ 'https://', !GetAtt PublicApplicationLoadBalancer.DNSName ] ] ]
+    Value: !If [ NoSslCertificate, !Join [ '', [ 'http://', !GetAtt PublicApplicationLoadBalancer.DNSName ] ], !Join [ '', [ 'https://', !GetAtt PublicApplicationLoadBalancer.DNSName ] ] ]
   SslCertificate:
-    Value:
-      !If [ SslCertificate, True, False ]
+    Value: !If [ SslCertificate, True, False ]
