@@ -1,7 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-
-Description: Stack to deploy a highly available, elastic, scalable Moodle environment. This master stack launches multiple nested stacks for different tiers. !! This can only be run in certain AWS Regions - 'us-east-1', 'us-east-2', 'us-west-2', 'eu-west-1'.
+Description: Moodle
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -10,8 +9,6 @@ Metadata:
         default: General AWS
       Parameters:
         - DeploymentLocation
-        - EC2KeyName
-        - SshAccessCidr
         - HostedZoneName
         - DomainName
         - NotifyEmailAddress
@@ -33,7 +30,6 @@ Metadata:
     - Label:
         default: Shared File Storage
       Parameters:
-        - SharedStorageEncryptionBoolean
         - SharedStorageEncryptionCmk
     - Label:
         default: Database Tier
@@ -43,7 +39,6 @@ Metadata:
         - DatabaseMinCapacity
         - DatabaseMaxCapacity
         - DatabaseInstanceType
-        - DatabaseEncryptedBoolean
         - DatabaseCmk
         - DatabaseMasterUsername
         # - DatabaseMasterPassword
@@ -53,16 +48,13 @@ Metadata:
       Parameters:
         - CacheEngineType
         - UseSessionCacheBoolean
+        - UseServerlessSessionCache
         - SessionCacheNodeType
         - UseApplicationCacheBoolean
+        - UseServerlessApplicationCache
         - ApplicationCacheNodeType
         - UseCloudFrontBoolean
         - CloudFrontAcmCertificate
-    - Label:
-        default: Bastion Tier
-      Parameters:
-        - NeedBastionHost
-        - BastionInstanceType
     - Label:
         default: Web Tier
       Parameters:
@@ -77,16 +69,10 @@ Metadata:
     ParameterLabels:
       DeploymentLocation:
         default: "Location to deploy from (S3 URL without trailing slash, e.g.: https://<my-bucket>.s3.<region>.amazonaws.com)"
-      BastionInstanceType:
-        default: Bastion Instance Type
-      NeedBastionHost:
-        default: Need Bastion Host?
       CloudFrontAcmCertificate:
         default: CloudFront Certificate ARN
       DatabaseCmk:
         default: AWS KMS CMK for RDS 
-      DatabaseEncryptedBoolean:
-        default: Encrypted DB Cluster
       DatabaseUseServerless:
         default: Should the database use Serverless engines?
       DatabaseMinCapacity:
@@ -99,16 +85,10 @@ Metadata:
         default: DB Master Username
       DatabaseName:
         default: DB Name
-      SharedStorageEncryptionBoolean:
-        default: Shared File Storage Encrypted?
       SharedStorageEncryptionCmk:
         default: (Optional) Shared File Storage Encryption Key ARN (AWS KMS CMK) 
-      EC2KeyName:
-        default: EC2 Key Pair
       PublicAlbAcmCertificate:
         default: ALB Certificate ARN
-      SshAccessCidr:
-        default: SSH Access From
       UseApplicationCacheBoolean:
         default: Use Application Cache
       ApplicationCacheNodeType:
@@ -158,118 +138,11 @@ Metadata:
       UseCloudFrontBoolean:
         default: Use CloudFront
 
-
 Parameters:
   DeploymentLocation:
-    Description: Location to deploy from (S3 URL), Keep it as is unless you created your own S3 bucket
+    Description: Templates location (S3 URL). By default, uses AWS provided templates.
     Type: String
-    Default: https://s3.amazonaws.com/aws-refarch/moodle/al2023/templates
-  BastionInstanceType:
-    AllowedValues:
-      - t3.nano 
-      - t3.micro 
-      - t3.small 
-      - t3.medium 
-      - t3.large 
-      - t3.xlarge 
-      - t3.2xlarge
-      - m5.large 
-      - m5.xlarge 
-      - m5.2xlarge 
-      - m5.4xlarge 
-      - m5.8xlarge 
-      - m5.12xlarge
-      - m5.16xlarge
-      - m5.24xlarge      
-      - c5.large 
-      - c5.xlarge 
-      - c5.2xlarge 
-      - c5.4xlarge 
-      - c5.9xlarge 
-      - c5.12xlarge
-      - c5.18xlarge  
-      - c5.24xlarge      
-      - r5.large 
-      - r5.xlarge 
-      - r5.2xlarge 
-      - r5.4xlarge 
-      - r5.8xlarge 
-      - r5.12xlarge
-      - r5.16xlarge
-      - r5.24xlarge
-      - t3a.nano 
-      - t3a.micro 
-      - t3a.small 
-      - t3a.medium 
-      - t3a.large 
-      - t3a.xlarge 
-      - t3a.2xlarge
-      - m5a.large 
-      - m5a.xlarge 
-      - m5a.2xlarge 
-      - m5a.4xlarge 
-      - m5a.8xlarge 
-      - m5a.12xlarge
-      - m5a.16xlarge
-      - m5a.24xlarge      
-      - c5a.large 
-      - c5a.xlarge 
-      - c5a.2xlarge 
-      - c5a.4xlarge 
-      - c5a.9xlarge 
-      - c5a.12xlarge
-      - c5a.18xlarge  
-      - c5a.24xlarge      
-      - r5a.large 
-      - r5a.xlarge 
-      - r5a.2xlarge 
-      - r5a.4xlarge 
-      - r5a.8xlarge 
-      - r5a.12xlarge
-      - r5a.16xlarge
-      - r5a.24xlarge
-      - t4g.nano 
-      - t4g.micro 
-      - t4g.small 
-      - t4g.medium 
-      - t4g.large 
-      - t4g.xlarge 
-      - t4g.2xlarge
-      - m6g.large 
-      - m6g.xlarge 
-      - m6g.2xlarge 
-      - m6g.4xlarge 
-      - m6g.8xlarge 
-      - m6g.12xlarge
-      - m6g.16xlarge
-      - m6g.24xlarge      
-      - c6g.large 
-      - c6g.xlarge 
-      - c6g.2xlarge 
-      - c6g.4xlarge 
-      - c6g.9xlarge 
-      - c6g.12xlarge
-      - c6g.18xlarge  
-      - c6g.24xlarge      
-      - r6g.large 
-      - r6g.xlarge 
-      - r6g.2xlarge 
-      - r6g.4xlarge 
-      - r6g.8xlarge 
-      - r6g.12xlarge
-      - r6g.16xlarge
-      - r6g.24xlarge
-    ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: t4g.nano
-    Description: Bastion EC2 instance type.
-    Type: String
-  NeedBastionHost:
-    AllowedValues:
-      - false
-      - true
-    Default: false
-    Description: Whether you need Bastion host to access machines, else you can use SSM agent by default.
-    Type: String
+    Default: https://s3.amazonaws.com/aws-refarch/moodle/4.4/templates
   PublicAlbAcmCertificate:
     AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
     Description: '[ Optional ] The AWS Certification Manager certificate ARN for the ALB certificate - this certificate should be created in the region you wish to run the ALB and must reference the domain name you use below.'
@@ -287,13 +160,6 @@ Parameters:
       - PostgreSQL
     Default: PostgreSQL
     Description: Indicates whether to use Aurora MySQL or PostgreSQL.
-    Type: String
-  DatabaseEncryptedBoolean:
-    AllowedValues:
-      - true
-      - false
-    Default: true
-    Description: Indicates whether the DB instances in the cluster are encrypted.
     Type: String
   DatabaseUseServerless:
     AllowedValues:
@@ -334,6 +200,8 @@ Parameters:
     AllowedValues:
       - db.t3.medium
       - db.t3.large
+      - db.t4g.medium
+      - db.t4g.large
       - db.r5.large
       - db.r5.xlarge
       - db.r5.2xlarge
@@ -348,6 +216,21 @@ Parameters:
       - db.r6g.8xlarge
       - db.r6g.12xlarge
       - db.r6g.16xlarge
+      - db.r6i.large
+      - db.r6i.xlarge
+      - db.r6i.2xlarge
+      - db.r6i.4xlarge
+      - db.r6i.8xlarge
+      - db.r6i.12xlarge
+      - db.r6i.16xlarge
+      - db.r6i.24xlarge
+      - db.r6i.32xlarge
+      - db.r6gd.xlarge
+      - db.r6gd.2xlarge
+      - db.r6gd.4xlarge
+      - db.r6gd.8xlarge
+      - db.r6gd.12xlarge
+      - db.r6gd.16xlarge
     ConstraintDescription: Must be a valid Aurora RDS instance type.
     Default: db.r6g.large
     Description: Amazon RDS database instance type (only used if non-serverless)
@@ -365,13 +248,6 @@ Parameters:
     Description: Aurora RDS database name
     Type: String
     Default: moodle
-  SharedStorageEncryptionBoolean:
-    AllowedValues:
-      - true
-      - false
-    Default: true
-    Description: Do you want encrypted Shared file storage?
-    Type: String
   SharedStorageEncryptionCmk:
     AllowedPattern: ^$|(arn:aws:kms:)([a-z0-9/:-])*([a-z0-9])$
     ConstraintDescription: Must be an existing ARN for an AWS KMS CMK.
@@ -389,14 +265,32 @@ Parameters:
     AllowedValues:
       - true
       - false
-    Default: false
-    Description: Specifies whether an ElastiCache Cache Cluster should be created for sessions. This will not be used at first and will be integrated only after IsMoodleSetupComplete parameter changes to 'Yes'.
+    Default: true
+    Description: Set to true to deploy ElastiCache session cache. This will not be used at first and will be integrated only after IsMoodleSetupComplete parameter changes to 'Yes'.
+    Type: String
+  UseServerlessSessionCache:
+    AllowedValues:
+      - true
+      - false
+    Default: true
+    Description: Set to true to deploy ElastiCache session cache using serverless approach. Set to false to use instances instead.
     Type: String
   SessionCacheNodeType:
     AllowedValues:
+      - cache.t2.micro
+      - cache.t2.small
+      - cache.t2.medium
       - cache.t3.micro
       - cache.t3.small
       - cache.t3.medium
+      - cache.t4g.micro
+      - cache.t4g.small
+      - cache.t4g.medium
+      - cache.m4.large
+      - cache.m4.xlarge
+      - cache.m4.2xlarge
+      - cache.m4.4xlarge
+      - cache.m4.10xlarge
       - cache.m5.large
       - cache.m5.xlarge
       - cache.m5.2xlarge
@@ -410,8 +304,33 @@ Parameters:
       - cache.m6g.8xlarge
       - cache.m6g.12xlarge
       - cache.m6g.16xlarge
+      - cache.r4.large
+      - cache.r4.xlarge
+      - cache.r4.2xlarge
+      - cache.r4.4xlarge
+      - cache.r4.8xlarge
+      - cache.r4.16xlarge
+      - cache.r5.large
+      - cache.r5.xlarge
+      - cache.r5.2xlarge
+      - cache.r5.4xlarge
+      - cache.r5.12xlarge
+      - cache.r5.24xlarge
+      - cache.r6g.large
+      - cache.r6g.xlarge
+      - cache.r6g.2xlarge
+      - cache.r6g.4xlarge
+      - cache.r6g.8xlarge
+      - cache.r6g.12xlarge
+      - cache.r6g.16xlarge
+      - cache.r6gd.xlarge
+      - cache.r6gd.2xlarge
+      - cache.r6gd.4xlarge
+      - cache.r6gd.8xlarge
+      - cache.r6gd.12xlarge
+      - cache.r6gd.16xlarge
     ConstraintDescription: Must be a valid Amazon ElastiCache node type.
-    Default: cache.m6g.large
+    Default: cache.r6g.large
     Description: The Amazon ElastiCache cluster node type.
     Type: String
   UseApplicationCacheBoolean:
@@ -421,11 +340,29 @@ Parameters:
     Default: false
     Description: Specifies whether an ElastiCache Cache Cluster should be created to cache application content.
     Type: String
+  UseServerlessApplicationCache:
+    AllowedValues:
+      - true
+      - false
+    Default: true
+    Description: Indicates whether to use serverless ElastiCache for application.
+    Type: String
   ApplicationCacheNodeType:
     AllowedValues:
+      - cache.t2.micro
+      - cache.t2.small
+      - cache.t2.medium
       - cache.t3.micro
       - cache.t3.small
       - cache.t3.medium
+      - cache.t4g.micro
+      - cache.t4g.small
+      - cache.t4g.medium
+      - cache.m4.large
+      - cache.m4.xlarge
+      - cache.m4.2xlarge
+      - cache.m4.4xlarge
+      - cache.m4.10xlarge
       - cache.m5.large
       - cache.m5.xlarge
       - cache.m5.2xlarge
@@ -439,19 +376,35 @@ Parameters:
       - cache.m6g.8xlarge
       - cache.m6g.12xlarge
       - cache.m6g.16xlarge
+      - cache.r4.large
+      - cache.r4.xlarge
+      - cache.r4.2xlarge
+      - cache.r4.4xlarge
+      - cache.r4.8xlarge
+      - cache.r4.16xlarge
+      - cache.r5.large
+      - cache.r5.xlarge
+      - cache.r5.2xlarge
+      - cache.r5.4xlarge
+      - cache.r5.12xlarge
+      - cache.r5.24xlarge
+      - cache.r6g.large
+      - cache.r6g.xlarge
+      - cache.r6g.2xlarge
+      - cache.r6g.4xlarge
+      - cache.r6g.8xlarge
+      - cache.r6g.12xlarge
+      - cache.r6g.16xlarge
+      - cache.r6gd.xlarge
+      - cache.r6gd.2xlarge
+      - cache.r6gd.4xlarge
+      - cache.r6gd.8xlarge
+      - cache.r6gd.12xlarge
+      - cache.r6gd.16xlarge
     ConstraintDescription: Must be a valid Amazon ElastiCache node type.
-    Default: cache.m6g.large
+    Default: cache.r6g.large
     Description: The Amazon ElastiCache cluster node type.
     Type: String
-  EC2KeyName:
-    ConstraintDescription: Must be letters (upper or lower), numbers, and special characters.
-    Description: Name of an EC2 KeyPair. Your bastion & Web instances will launch with this KeyPair.
-    Type: AWS::EC2::KeyPair::KeyName
-  SshAccessCidr:
-    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
-    Description: The CIDR IP range that is permitted to SSH to bastion instance. Note - a value of 0.0.0.0/0 will allow access from ANY IP address. You could also use <your-ip>/32 to restrict to your own public IP address.
-    Type: String
-    Default: 0.0.0.0/0
   WebAsgMax:
     AllowedPattern: ^((?!0$)[1-2]?[0-9]|30)$
     ConstraintDescription: Must be a number between 1 and 30.
@@ -542,7 +495,15 @@ Parameters:
       - m6g.8xlarge 
       - m6g.12xlarge
       - m6g.16xlarge
-      - m6g.24xlarge      
+      - m6g.24xlarge
+      - m7g.medium
+      - m7g.large
+      - m7g.xlarge
+      - m7g.2xlarge
+      - m7g.4xlarge
+      - m7g.8xlarge
+      - m7g.12xlarge
+      - m7g.16xlarge
       - c6g.large 
       - c6g.xlarge 
       - c6g.2xlarge 
@@ -559,8 +520,16 @@ Parameters:
       - r6g.12xlarge
       - r6g.16xlarge
       - r6g.24xlarge
+      - c7g.medium
+      - c7g.large
+      - c7g.xlarge
+      - c7g.2xlarge
+      - c7g.4xlarge
+      - c7g.8xlarge
+      - c7g.12xlarge
+      - c7g.16xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: m6g.large
+    Default: c7g.xlarge
     Description: The Amazon EC2 instance type for your web instances.
     Type: String
   HostedZoneName:
@@ -576,8 +545,7 @@ Parameters:
     Type: String
     Default: en
   AvailabilityZones:
-    Description: 'List of Availability Zones to use for the subnets in the VPC. Note:
-      The logical order is preserved.'
+    Description: 'List of Availability Zones to use for the subnets in the VPC. Note: The logical order is preserved.'
     Type: List<AWS::EC2::AvailabilityZone::Name>
   NumberOfAZs:
     AllowedValues:
@@ -670,8 +638,12 @@ Conditions:
     !Equals [ false, !Ref UseSessionCacheBoolean ]
   DeployWithSessionCache: 
     !Equals [ true, !Ref UseSessionCacheBoolean ]
+  DeployWithServerlessSessionCache: 
+    !Equals [ true, !Ref UseServerlessSessionCache ]
   DeployApplicationCache: 
     !Equals [ true, !Ref UseApplicationCacheBoolean ]
+  DeployWithServerlessApplicationCache: 
+    !Equals [ true, !Ref UseServerlessApplicationCache ]
   DeployRoute53: 
     !And [ 
       !Not [!Equals ['', !Ref DomainName ] ],
@@ -702,8 +674,6 @@ Conditions:
         !Equals [ true, !Ref UseCloudFrontBoolean ]
       ]
    ]
-  DeployWithBastionHost:
-    !Equals [true, !Ref NeedBastionHost ] 
   SharedStorageEFS:
     !Equals ['EFS', 'EFS' ]
   DeployUsingRDSServerless:
@@ -801,31 +771,13 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        SshAccessCidr:
-          !Ref SshAccessCidr
         Vpc:
           !GetAtt [ vpc, Outputs.Vpc ]
         DatabaseType:
           !Ref DatabaseType
+        ElastiCacheType:
+          !Ref CacheEngineType
       TemplateURL: !Sub '${DeploymentLocation}/02-securitygroups.yaml'
-
-  bastion:
-    Condition: DeployWithBastionHost
-    DependsOn: securitygroups
-    Type: AWS::CloudFormation::Stack
-    Properties:
-      Parameters:
-        BastionInstanceType:
-          !Ref BastionInstanceType
-        BastionSecurityGroup:
-          !GetAtt [ securitygroups, Outputs.BastionSecurityGroup ]
-        EC2KeyName:
-          !Ref EC2KeyName
-        NumberOfSubnets:
-          !Ref NumberOfAZs
-        Subnet:
-          !GetAtt [ vpc, Outputs.PublicSubnet ]
-      TemplateURL: !Sub '${DeploymentLocation}/03-bastion.yaml'
 
   publicalb:
     DependsOn: securitygroups
@@ -862,8 +814,6 @@ Resources:
           !Ref rdsInstanceSecret
         DatabaseName:
           !Ref DatabaseName
-        DatabaseEncryptedBoolean:
-          !Ref DatabaseEncryptedBoolean
         DatabaseCmk:
           !Ref DatabaseCmk
         DatabaseSecurityGroup:
@@ -892,8 +842,6 @@ Resources:
           !Ref DatabaseMinCapacity
         DatabaseMaxCapacity:
           !Ref DatabaseMaxCapacity
-        DatabaseEncryptedBoolean:
-          !Ref DatabaseEncryptedBoolean
         DatabaseCmk:
           !Ref DatabaseCmk
         DatabaseSecurityGroup:
@@ -912,8 +860,6 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        EncryptedBoolean:
-          !Ref SharedStorageEncryptionBoolean
         Cmk:
           !Ref SharedStorageEncryptionCmk
         SecurityGroup:
@@ -931,10 +877,8 @@ Resources:
     Type: AWS::CloudFormation::Stack
     Properties:
       Parameters:
-        EC2KeyName:
-          !Ref EC2KeyName
         PipelineSecurityGroup:
-         !GetAtt [ securitygroups, Outputs.EfsSecurityGroup ]
+         !GetAtt [ securitygroups, Outputs.WebSecurityGroup ]
         NumberOfSubnets:
           !Ref NumberOfAZs
         PipelineSubnet:
@@ -963,19 +907,14 @@ Resources:
       Parameters:
         CacheEngineType: !Ref CacheEngineType
         CacheUsageType: 'session'
-        Subnet:
-          !GetAtt [ vpc, Outputs.DataSubnet ]
-        ElastiCacheClusterName:
-          !Sub '${AWS::StackName}session'
-        ElastiCacheNodeType:
-          !Ref SessionCacheNodeType
-        ElastiCacheSecurityGroup:
-          !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
-        NumberOfSubnets:
-          !Ref NumberOfAZs
-        ProjectName:
-          !Sub '${AWS::StackName}'
-      TemplateURL: !Sub '${DeploymentLocation}/03-elasticache.yaml'
+        Subnet: !GetAtt [ vpc, Outputs.DataSubnet ]
+        ElastiCacheClusterName: !Sub '${AWS::StackName}session'
+        ElastiCacheNodeType: !Ref SessionCacheNodeType
+        ElastiCacheSecurityGroup: !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
+        NumberOfSubnets: !Ref NumberOfAZs
+        ProjectName: !Sub '${AWS::StackName}'
+      TemplateURL: !If [ DeployWithServerlessSessionCache, !Sub '${DeploymentLocation}/03-elasticacheserverless.yaml', !Sub '${DeploymentLocation}/03-elasticache.yaml' ]
+
   applicationcache:
     Condition: DeployApplicationCache
     DependsOn: securitygroups
@@ -984,19 +923,14 @@ Resources:
       Parameters:
         CacheEngineType: !Ref CacheEngineType
         CacheUsageType: 'application'
-        Subnet:
-          !GetAtt [ vpc, Outputs.DataSubnet ]
-        ElastiCacheClusterName: 
-          !Sub '${AWS::StackName}application'
-        ElastiCacheNodeType:
-          !Ref ApplicationCacheNodeType
-        ElastiCacheSecurityGroup:
-          !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
-        NumberOfSubnets:
-          !Ref NumberOfAZs
-        ProjectName:
-          !Sub '${AWS::StackName}'
-      TemplateURL: !Sub '${DeploymentLocation}/03-elasticache.yaml'
+        Subnet: !GetAtt [ vpc, Outputs.DataSubnet ]
+        ElastiCacheClusterName:  !Sub '${AWS::StackName}application'
+        ElastiCacheNodeType: !Ref ApplicationCacheNodeType
+        ElastiCacheSecurityGroup: !GetAtt [ securitygroups, Outputs.ElastiCacheSecurityGroup ]
+        NumberOfSubnets: !Ref NumberOfAZs
+        ProjectName: !Sub '${AWS::StackName}'
+      TemplateURL: !If [ DeployWithServerlessApplicationCache, !Sub '${DeploymentLocation}/03-elasticacheserverless.yaml', !Sub '${DeploymentLocation}/03-elasticache.yaml' ]
+
   webapp:
     DependsOn: [ publicalb, pipelineHelper ]
     Type: AWS::CloudFormation::Stack
@@ -1004,8 +938,6 @@ Resources:
       Parameters:
         RDSInstanceSecretArn:
           !Ref rdsInstanceSecret
-        EC2KeyName:
-          !Ref EC2KeyName
         NumberOfSubnets:
           !Ref NumberOfAZs
         Subnet:
