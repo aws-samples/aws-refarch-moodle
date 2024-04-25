@@ -1,101 +1,87 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-
-Description: Reference Architecture to host Moodle on AWS - Creates VPC security groups
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-    - Label:
-        default: AWS Parameters
-      Parameters:
-        - SshAccessCidr
-        - Vpc
-    ParameterLabels:
-      SshAccessCidr:
-        default: SSH Access From
-      Vpc:
-        default: Vpc Id
+Description: Moodle security groups
 
 Parameters:
-  SshAccessCidr:
-    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$
-    Description: The CIDR IP range that is permitted to SSH to bastion instance. Note - a value of 0.0.0.0/0 will allow access from ANY IP address.
-    Type: String
-    Default: 0.0.0.0/0
   Vpc:
     AllowedPattern: ^(vpc-)([a-z0-9]{8}|[a-z0-9]{17})$
-    Description: The Vpc Id of an existing Vpc.
+    Description: VPC Id of an existing VPC.
     Type: AWS::EC2::VPC::Id
   DatabaseType:
     AllowedValues:
       - MySQL
       - PostgreSQL
     Default: PostgreSQL
-    Description: Indicates whether to use Aurora MySQL or PostgreSQL.
+    Description: Database engine to use.
     Type: String
+  ElastiCacheType:
+    AllowedValues:
+      - Redis
+      - Memcached
+    Default: Memcached
+    Description: Cache engine to use.
+    Type: String
+
 Conditions:
   UsePostgreSQL:
-    !Equals [!Ref DatabaseType, PostgreSQL]  
+    !Equals [!Ref DatabaseType, PostgreSQL]
+  UseRedis:
+    !Equals [!Ref ElastiCacheType, Redis]
+
 Resources:
-
-  BastionSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for Bastion instances
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: !Ref SshAccessCidr
-      VpcId:
-        !Ref Vpc
-
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for Amazon RDS cluster
+      GroupDescription: Database Security Group
       SecurityGroupIngress:
         - IpProtocol: tcp
+          Description: "Allow database access from instances in the Web Security Group"
           FromPort: !If [ UsePostgreSQL, 5432, 3306 ]
           ToPort: !If [ UsePostgreSQL, 5432, 3306 ]
           SourceSecurityGroupId: !Ref WebSecurityGroup
-      VpcId:
-        !Ref Vpc
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        Description: "Block all egress"
+        CidrIp: 127.0.0.1/32
+      VpcId: !Ref Vpc
 
   ElastiCacheSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for ElastiCache cache cluster
+      GroupDescription: Cache Security Group
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 11211
-          ToPort: 11211
+          Description: "Allow cache engine access from instances in the Web Security Group"
+          FromPort: !If [ UseRedis, 6379, 11211 ]
+          ToPort: !If [ UseRedis, 6379, 11211 ]
           SourceSecurityGroupId: !Ref WebSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 6379
-          ToPort: 6379
-          SourceSecurityGroupId: !Ref WebSecurityGroup
-      VpcId:
-        !Ref Vpc
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        Description: "Block all egress"
+        CidrIp: 127.0.0.1/32
+      VpcId: !Ref Vpc
+
   EfsSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for EFS mount targets
-      VpcId: !Ref Vpc
+      GroupDescription: EFS Security Group
       SecurityGroupIngress:
         - IpProtocol: tcp
+          Description: "Allow NFS access from instances in the Web Security Group"
           FromPort: 2049
           ToPort: 2049
           SourceSecurityGroupId: !Ref WebSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        Description: "Block all egress"
+        CidrIp: 127.0.0.1/32
+      VpcId: !Ref Vpc
+
   EfsSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
     Properties:
       IpProtocol: tcp
+      Description: "Allow NFS access from instances in EFS Security Group"
       FromPort: 2049
       ToPort: 2049
       SourceSecurityGroupId: !GetAtt EfsSecurityGroup.GroupId
@@ -104,42 +90,66 @@ Resources:
   PublicAlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for ALB
+      GroupDescription: Load balancer Security Group
       SecurityGroupIngress:
         - IpProtocol: tcp
+          Description: "Allow https access from everywhere"
           FromPort: 443
           ToPort: 443
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
+          Description: "Allow http access from everywhere"
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-      VpcId:
-        !Ref Vpc       
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        Description: "Block all egress"
+        CidrIp: 127.0.0.1/32
+      VpcId: !Ref Vpc       
+
+  PublicAlbSecurityGroupEgressHttp:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      Description: "Allow http access to Web security group"
+      FromPort: 80
+      ToPort: 80
+      DestinationSecurityGroupId: !GetAtt WebSecurityGroup.GroupId
+      GroupId: !GetAtt PublicAlbSecurityGroup.GroupId
+
+  PublicAlbSecurityGroupEgressHttps:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      IpProtocol: tcp
+      Description: "Allow http access to Web security group"
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !GetAtt WebSecurityGroup.GroupId
+      GroupId: !GetAtt PublicAlbSecurityGroup.GroupId
 
   WebSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for web instances
+      GroupDescription: Web instances Security Group
       SecurityGroupIngress:
         - IpProtocol: tcp
+          Description: "Allow http access from load balancer Security Group"
           FromPort: 80
           ToPort: 80
           SourceSecurityGroupId: !Ref PublicAlbSecurityGroup
         - IpProtocol: tcp
+          Description: "Allow https access from load balancer Security Group"
           FromPort: 443
           ToPort: 443
           SourceSecurityGroupId: !Ref PublicAlbSecurityGroup
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          SourceSecurityGroupId: !Ref BastionSecurityGroup
-      VpcId:
-        !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          Description: "Allow outgoing access from web instances to Internet (download packages, updates)"
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref Vpc
 
 Outputs:
-  BastionSecurityGroup:
-    Value: !Ref BastionSecurityGroup
   DatabaseSecurityGroup:
     Value: !Ref DatabaseSecurityGroup
   EfsSecurityGroup:
