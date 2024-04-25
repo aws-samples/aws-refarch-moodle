@@ -1,3 +1,7 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Moodle deployment pipeline
+
 Parameters: 
   CodeCommitRepoName: 
     Type: "String"
@@ -9,7 +13,7 @@ Parameters:
   BranchName:
     Type: "String"
     Default: "main"
-    Description: repository's branch name
+    Description: Repository branch name
   AppAutoScalingGroupName:
     Type: "String"
     Description: Name of Autoscaling group for Moodle Web app.
@@ -29,8 +33,6 @@ Parameters:
     Type: String
 
 Resources:
-  # AWS CodePipeline to deploy source code from CodeCommit repo to autoscaling groups for Moodle Web apps.
-  
   # This role is assumed by the CodePipeline service itself. 
   MoodleCodeDeployServiceRole:
     Type: AWS::IAM::Role
@@ -54,7 +56,6 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-              - iam:PassRole
               - ec2:CreateTags
               - ec2:RunInstances
             Resource:
@@ -66,11 +67,10 @@ Resources:
       ApplicationName: !Sub '${ProjectName}-DeployApp'
 
   MoodleDeploymentGroup:
-    Type: 'AWS::CodeDeploy::DeploymentGroup'
+    Type: AWS::CodeDeploy::DeploymentGroup
     DependsOn: MoodleDeployApp
     Properties:
       ApplicationName: !Ref MoodleDeployApp
-      DeploymentGroupName: !Sub '${ProjectName}-AppDG'
       ServiceRoleArn: !GetAtt MoodleCodeDeployServiceRole.Arn
       DeploymentStyle:
         DeploymentOption: BLUE_GREEN #IN_PLACE
@@ -90,7 +90,6 @@ Resources:
       Description: SSM Parameter for Moodle WebApp Auto scaling group
 
   #This role is for Moodle pipeline to perform ci-cd tasks.
-  # !TODO to limit this role from full access.
   MoodlePipelineRole:
     Type: AWS::IAM::Role
     Properties:
@@ -104,6 +103,7 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/AWSCodePipeline_FullAccess'
+        - 'arn:aws:iam::aws:policy/AWSCodeDeployDeployerAccess'
       Path: /
       Policies:
       - PolicyName: MoodlePipelineCustomPolicy
@@ -112,7 +112,14 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-            - codedeploy:*
+            - codedeploy:CreateDeployment
+            - codedeploy:CreateDeployment*
+            - codedeploy:StopDeployment
+            - codedeploy:Update*
+            - codedeploy:RegisterApplicationRevision
+            - codedeploy:Get*
+            - codedeploy:List*
+            - codedeploy:PutLifecycleEventHookExecutionStatus
             Resource:
               - arn:aws:codedeploy:*:*:application:*
               - arn:aws:codedeploy:*:*:deploymentgroup:*/*
@@ -120,15 +127,25 @@ Resources:
               - arn:aws:codedeploy:*:*:deploymentconfig:*
           - Effect: Allow
             Action:
-              - s3:*
+              - s3:GetObject
+              - s3:ListBucket
+              - s3:GetBucketLocation
+              - s3:PutObject
             Resource:
               - !Ref CodeArtifactS3BucketArn
               - !Join [ '', [ !Ref CodeArtifactS3BucketArn,'/*' ] ]
           - Effect: Allow
             Action:
-              - codecommit:*
+              - codecommit:GetRepository
+              - codecommit:ListBranches
+              - codecommit:GitPull
+              - codecommit:GetBranch
+              - codecommit:GetCommit
+              - codecommit:UploadArchive
+              - codecommit:GetUploadArchiveStatus
             Resource:
               - !Ref CodeCommitRepoArn
+              - !Join [ '', [ !Ref CodeCommitRepoArn,'/*' ] ]
 
   # The CI/CD pipeline stitching the full mechanism together
   MoodleAppPipeline:
