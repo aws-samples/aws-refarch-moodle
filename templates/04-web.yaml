@@ -1,17 +1,10 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
+Description: Moodle web instances
 
-Description: Reference Architecture to host Moodle on AWS - Creates Moodle web Auto Scaling group
-      
 Parameters:
-
   RDSInstanceSecretArn:
     Type: String
-  EC2KeyName:
-    AllowedPattern: ^([a-zA-Z0-9 @.`~!#$%^&*()_+,\\-])*$
-    ConstraintDescription: Must be letters (upper or lower), numbers, and special characters.
-    Description: Name of an EC2 KeyPair. Your bastion & Web instances will launch with this KeyPair.
-    Type: AWS::EC2::KeyPair::KeyName
   NumberOfSubnets:
     AllowedValues:
     - 1
@@ -116,7 +109,15 @@ Parameters:
       - m6g.8xlarge 
       - m6g.12xlarge
       - m6g.16xlarge
-      - m6g.24xlarge      
+      - m6g.24xlarge
+      - m7g.medium
+      - m7g.large
+      - m7g.xlarge
+      - m7g.2xlarge
+      - m7g.4xlarge
+      - m7g.8xlarge
+      - m7g.12xlarge
+      - m7g.16xlarge
       - c6g.large 
       - c6g.xlarge 
       - c6g.2xlarge 
@@ -133,8 +134,16 @@ Parameters:
       - r6g.12xlarge
       - r6g.16xlarge
       - r6g.24xlarge
+      - c7g.medium
+      - c7g.large
+      - c7g.xlarge
+      - c7g.2xlarge
+      - c7g.4xlarge
+      - c7g.8xlarge
+      - c7g.12xlarge
+      - c7g.16xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: m6g.large
+    Default: c7g.xlarge
     Description: The Amazon EC2 instance type for your web instances.
     Type: String
   WebSecurityGroup:
@@ -156,25 +165,17 @@ Parameters:
     Type: String
 
 Conditions:
-  NumberOfSubnets1:
-    !Equals [ 1, !Ref NumberOfSubnets ]
-  NumberOfSubnets2:
-    !Equals [ 2, !Ref NumberOfSubnets ]
-  NumberOfSubnets3:
-    !Equals [ 3, !Ref NumberOfSubnets ]
-  Subnet0: !Or
-    - !Condition NumberOfSubnets1
-    - !Condition NumberOfSubnets2
-    - !Condition NumberOfSubnets3
-  Subnet1: !Or
-    - !Condition NumberOfSubnets2
-    - !Condition NumberOfSubnets3
-  Subnet2: !Condition NumberOfSubnets3
+  NumberOfSubnets1: !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2: !Equals [ 2, !Ref NumberOfSubnets ]
+  NumberOfSubnets3: !Equals [ 3, !Ref NumberOfSubnets ]
   UsingGraviton2Ami:  !Or
     - !Equals ["t4",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["c6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["c7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["m6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["m7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["r6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["r7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     
 Resources:
   WebInstanceProfile:
@@ -183,6 +184,7 @@ Resources:
       Path: /
       Roles:
       - !Ref WebInstanceRole
+
   WebInstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -206,19 +208,18 @@ Resources:
           Statement:
           - Effect: Allow
             Action:
-            - logs:CreateLogGroup
             - logs:CreateLogStream
             - logs:PutLogEvents
             - logs:DescribeLogStreams
             Resource:
-            - arn:aws:logs:*:*:*
+            - !GetAtt Logs.Arn
           - Effect: Allow
             Action:
             - autoscaling:CompleteLifecycleAction
             - autoscaling:DescribeAutoScalingInstances
             - autoscaling:DescribeLifecycleHooks
             Resource:
-            - arn:aws:autoscaling:*:*:*
+            - "*"
           - Effect: Allow
             Action:
             - secretsmanager:GetSecretValue
@@ -226,7 +227,9 @@ Resources:
             - !Ref RDSInstanceSecretArn
           - Effect: Allow
             Action:
-            - s3:*
+            - s3:GetObject
+            - s3:ListBucket
+            - s3:GetBucketLocation
             Resource:
               - !Ref CodeArtifactS3BucketArn
               - !Join [ '', [ !Ref CodeArtifactS3BucketArn,'/*' ] ]
@@ -239,7 +242,7 @@ Resources:
             
   Logs: 
       Type: AWS::Logs::LogGroup
-      DeletionPolicy: Retain
+      DeletionPolicy: Delete
       Properties: 
         RetentionInDays: 7
 
@@ -587,7 +590,6 @@ Resources:
         InstanceType: !Ref WebInstanceType
         Monitoring:
           Enabled: true
-        KeyName: !Ref EC2KeyName
         SecurityGroupIds:
         - !Ref WebSecurityGroup
         UserData:
