@@ -1,42 +1,6 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-
-Description: Reference Architecture to host Moodle on AWS - Creates RDS Aurora Serverless v2 MySQL or PostgreSQL database
-
-Metadata:
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-    - Label:
-        default: Database Parameters
-      Parameters:
-        - DatabaseType
-        - DatabaseMinCapacity
-        - DatabaseMaxCapacity
-        - DatabaseName
-        - DatabaseEncryptedBoolean
-        - DatabaseCmk
-        - DatabaseSecurityGroup
-        - NumberOfSubnets
-        - Subnet
-    ParameterLabels:
-      DatabaseType:
-        default: Aurora database type
-      DatabaseMinCapacity:
-        default: Minimum capacity for database
-      DatabaseMaxCapacity:
-        default: Maximum capacity for database
-      DatabaseEncryptedBoolean:
-        default: Encrypted DB Cluster
-      DatabaseCmk:
-        default: AWS KMS Customer Master Key (CMK) to encrypt DB 
-      DatabaseName:
-        default: DB Name
-      DatabaseSecurityGroup:
-        default: DB Security Group
-      NumberOfSubnets:
-        default: Number of subnets
-      Subnet:
-        default: Subnets
+Description: Moodle serverless database
 
 Parameters:
   DatabaseType:
@@ -44,14 +8,7 @@ Parameters:
       - MySQL
       - PostgreSQL
     Default: PostgreSQL
-    Description: Indicates whether to use Aurora MySQL or PostgreSQL.
-    Type: String
-  DatabaseEncryptedBoolean:
-    AllowedValues:
-      - true
-      - false
-    Default: True
-    Description: Indicates whether the DB instances in the cluster are encrypted.
+    Description: Database engine to use.
     Type: String
   DatabaseCmk:
     Description: AWS KMS Customer Master Key (CMK) to encrypt database cluster
@@ -111,26 +68,11 @@ Parameters:
     Type: String
 
 Conditions:
-  UseMySQL:
-    !Equals [!Ref DatabaseType, MySQL]
-  UsePostgreSQL:
-    !Equals [!Ref DatabaseType, PostgreSQL]
-  NumberOfSubnets1:
-      !Equals [ 1, !Ref NumberOfSubnets ]
-  NumberOfSubnets2:
-      !Equals [ 2, !Ref NumberOfSubnets ]
-  NumberOfSubnets3:
-      !Equals [ 3, !Ref NumberOfSubnets ]
-  Subnet0: !Or
-    - !Condition NumberOfSubnets1
-    - !Condition NumberOfSubnets2
-    - !Condition NumberOfSubnets3
-  Subnet1: !Or
-    - !Condition NumberOfSubnets2
-    - !Condition NumberOfSubnets3
-  Subnet2: !Condition NumberOfSubnets3
-  UseAWS-ManagedCMK:
-    !Equals ['', !Ref DatabaseCmk]
+  UseMySQL: !Equals [!Ref DatabaseType, MySQL]
+  UsePostgreSQL: !Equals [!Ref DatabaseType, PostgreSQL]
+  NumberOfSubnets1: !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2: !Equals [ 2, !Ref NumberOfSubnets ]
+  UseAWS-ManagedCMK: !Equals ['', !Ref DatabaseCmk]
 
 Resources:
   DatabaseCluster:
@@ -139,22 +81,12 @@ Resources:
       BackupRetentionPeriod: 30
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine:
-        !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
-      DBClusterParameterGroupName:
-        !If [ UsePostgreSQL, default.aurora-postgresql13, default.aurora-mysql8.0 ]     
-      EngineVersion:  
-        !If [ UsePostgreSQL, '13.8', '8.0.mysql_aurora.3.02.1' ]
-      KmsKeyId:
-        !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
+      Engine: !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
+      Port: !If [ UsePostgreSQL, 5432, 3306 ]
+      KmsKeyId: !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref DatabaseCmk ]
       MasterUsername: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSInstanceSecretArn, ':SecretString:username}}' ]]
       MasterUserPassword: !Join ['', ['{{resolve:secretsmanager:', !Ref RDSInstanceSecretArn, ':SecretString:password}}' ]]
-      Port:
-        !If [ UsePostgreSQL, 5432, 3306 ]
-      StorageEncrypted: !Ref DatabaseEncryptedBoolean
-      Tags:
-        - Key: Name
-          Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
+      StorageEncrypted: true
       VpcSecurityGroupIds:
       - !Ref DatabaseSecurityGroup
       ServerlessV2ScalingConfiguration:
@@ -170,29 +102,16 @@ Resources:
       DBClusterIdentifier: !Ref DatabaseCluster
       DBInstanceClass: 'db.serverless'
       DBSubnetGroupName: !Ref DataSubnetGroup
-      Engine:
-        !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
-      Tags:
-        - Key: Name
-          Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
+      Engine: !If [ UsePostgreSQL, aurora-postgresql, aurora-mysql ]
+      PubliclyAccessible: false
 
   DataSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
       DBSubnetGroupDescription: RDS Database Subnet Group for Moodle
-      SubnetIds:
-        !If
-          [ NumberOfSubnets1,
-          [ !Select [ 0, !Ref Subnet ] ],
-          !If
-            [ NumberOfSubnets2,
-            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
-            [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ]
-            ]
-          ]
-      Tags:
-        - Key: Name
-          Value: !Join [ '', [ 'Moodle / ', !Ref 'AWS::StackName' ] ]
+      SubnetIds: !If [ NumberOfSubnets1, [ !Select [ 0, !Ref Subnet ] ],
+        !If [ NumberOfSubnets2, [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
+        [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ] ] ]
 
   DatabaseClusterParam:
     Type: AWS::SSM::Parameter
@@ -200,16 +119,15 @@ Resources:
       Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/DB/ClusterEndpoint' ] ]
       Type: String
       Value: !GetAtt DatabaseCluster.Endpoint.Address
-      Description: SSM Parameter for Moodle DB Cluster
+      Description: Moodle DB Cluster Endpoint
 
   DatabaseClusterReadOnlyParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/DB/ClusterReadOnlyEndpoint' ] ]
       Type: String
-      # Aurora Serverless v1 does not support Read-only replicas
-      Value: !GetAtt DatabaseCluster.Endpoint.Address
-      Description: SSM Parameter for Moodle DB Cluster Read only
+      Value: !GetAtt DatabaseCluster.ReadEndpoint.Address
+      Description: Moodle DB Cluster Read only Endpoint
 
   DatabaseNameParam:
     Type: AWS::SSM::Parameter
@@ -217,7 +135,7 @@ Resources:
       Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/DB/Name' ] ]
       Type: String
       Value: !Ref DatabaseName
-      Description: SSM Parameter for Moodle DB Name
+      Description: Moodle DB Name
 
   DatabaseTypeParam:
     Type: AWS::SSM::Parameter
@@ -225,7 +143,7 @@ Resources:
       Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/DB/Type' ] ]
       Type: String
       Value: !Ref DatabaseType
-      Description: SSM Parameter for Moodle DB Type
+      Description: for Moodle DB Type
 
 Outputs:
   Database:
@@ -240,5 +158,3 @@ Outputs:
     Value: !GetAtt DatabaseCluster.Endpoint.Port
   DatabaseClusterReadEndpointAddress:
     Value: !GetAtt DatabaseCluster.ReadEndpoint.Address  
-
-

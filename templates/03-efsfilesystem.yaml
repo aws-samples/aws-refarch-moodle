@@ -1,16 +1,8 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-
-Description: Setting up EFS File System and Target mount points for each subnet
+Description: Moodle EFS shared file system
 
 Parameters:
-  EncryptedBoolean:
-    AllowedValues:
-      - True
-      - False
-    Default: True
-    Description: Create an encrypted Amazon EFS file system.
-    Type: String
   Cmk:
     Description: An existing AWS KMS Customer Master Key (CMK) to encrypt file system
     Type: String
@@ -56,14 +48,11 @@ Resources:
   ElasticFileSystem:
     Type: AWS::EFS::FileSystem
     Properties:
-      Encrypted: !Ref EncryptedBoolean
-      KmsKeyId:
-        !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref Cmk ]
-      FileSystemTags:
-        - Key: Name
-          Value: !Join [ '-', [ !Ref ProjectName, 'FileSystem'] ]
+      Encrypted: true
+      KmsKeyId: !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref Cmk ]
       PerformanceMode: generalPurpose
       ThroughputMode: elastic
+
   ElasticFileSystemMountTarget0:
     Condition: Subnet0
     Type: AWS::EFS::MountTarget
@@ -72,6 +61,7 @@ Resources:
       SecurityGroups:
       - !Ref SecurityGroup
       SubnetId: !Select [ 0, !Ref Subnet ]
+
   ElasticFileSystemMountTarget1:
     Condition: Subnet1
     Type: AWS::EFS::MountTarget
@@ -80,6 +70,7 @@ Resources:
       SecurityGroups:
       - !Ref SecurityGroup
       SubnetId: !Select [ 1, !Ref Subnet ]
+
   ElasticFileSystemMountTarget2:
     Condition: Subnet2
     Type: AWS::EFS::MountTarget
@@ -88,13 +79,14 @@ Resources:
       SecurityGroups:
       - !Ref SecurityGroup
       SubnetId: !Select [ 2, !Ref Subnet ]
+
   ElasticFileSystemParam:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/SharedFile/ElasticFileSystem' ] ]
       Type: String
       Value: !Ref ElasticFileSystem
-      Description: SSM Parameter for Moodle EFS File System Id
+      Description: Moodle EFS File System Id
 
 Outputs:
   ElasticFileSystem:

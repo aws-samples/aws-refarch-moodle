@@ -4,11 +4,6 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: This templates helps creating CodeCommit repo, S3 Bucket and update repo with Moodle code & configurations.
 
 Parameters:
-
-  EC2KeyName:
-    Description: Name of an existing EC2 key pair
-    Type: AWS::EC2::KeyPair::KeyName
-
   PipelineSecurityGroup:
     Description: Select the Pipeline security group Id
     Type: AWS::EC2::SecurityGroup::Id  
@@ -28,6 +23,13 @@ Parameters:
 
   InstanceType:
     AllowedValues:
+      - t3.nano 
+      - t3.micro 
+      - t3.small 
+      - t3.medium 
+      - t3.large 
+      - t3.xlarge 
+      - t3.2xlarge
       - m5.large 
       - m5.xlarge 
       - m5.2xlarge 
@@ -52,6 +54,13 @@ Parameters:
       - r5.12xlarge
       - r5.16xlarge
       - r5.24xlarge
+      - t3a.nano 
+      - t3a.micro 
+      - t3a.small 
+      - t3a.medium 
+      - t3a.large 
+      - t3a.xlarge 
+      - t3a.2xlarge
       - m5a.large 
       - m5a.xlarge 
       - m5a.2xlarge 
@@ -76,6 +85,13 @@ Parameters:
       - r5a.12xlarge
       - r5a.16xlarge
       - r5a.24xlarge
+      - t4g.nano 
+      - t4g.micro 
+      - t4g.small 
+      - t4g.medium 
+      - t4g.large 
+      - t4g.xlarge 
+      - t4g.2xlarge
       - m6g.large 
       - m6g.xlarge 
       - m6g.2xlarge 
@@ -83,7 +99,15 @@ Parameters:
       - m6g.8xlarge 
       - m6g.12xlarge
       - m6g.16xlarge
-      - m6g.24xlarge      
+      - m6g.24xlarge
+      - m7g.medium
+      - m7g.large
+      - m7g.xlarge
+      - m7g.2xlarge
+      - m7g.4xlarge
+      - m7g.8xlarge
+      - m7g.12xlarge
+      - m7g.16xlarge
       - c6g.large 
       - c6g.xlarge 
       - c6g.2xlarge 
@@ -100,8 +124,16 @@ Parameters:
       - r6g.12xlarge
       - r6g.16xlarge
       - r6g.24xlarge
+      - c7g.medium
+      - c7g.large
+      - c7g.xlarge
+      - c7g.2xlarge
+      - c7g.4xlarge
+      - c7g.8xlarge
+      - c7g.12xlarge
+      - c7g.16xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: m6g.large
+    Default: c7g.xlarge
     Description: The Amazon EC2 instance type that dynamically adjusts thresholds based on permitted throughput changes.
     Type: String
   
@@ -165,10 +197,13 @@ Conditions:
     - !Condition NumberOfSubnets3
   Subnet2: !Condition NumberOfSubnets3
   UsingGraviton2Ami:  !Or
-    - !Equals ["t4",!Select [0, !Split [ "g.", !Ref InstanceType]]]
-    - !Equals ["c6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
-    - !Equals ["m6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
-    - !Equals ["r6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
+    - !Equals ["t4",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["c6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["c7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["m6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["m7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["r6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["r7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
 
 Resources:
 ########################### TODO put this in the codepipeline template
@@ -182,6 +217,16 @@ Resources:
   CodeArtifactS3Bucket:
     Type: AWS::S3::Bucket
     DeletionPolicy: RetainExceptOnCreate
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
 
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
@@ -224,8 +269,19 @@ Resources:
              !Sub  'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${ProjectName}-Pipeline'
           - Effect: Allow
             Action:
+              - codecommit:GitPull
               - codecommit:GitPush
-            Resource: !GetAtt MoodleRepo.Arn
+              - codecommit:CreateBranch
+              - codecommit:CreateCommit
+              - codecommit:GetRepository
+              - codecommit:Get*
+              - codecommit:List*
+              - codecommit:PutFile
+              - codecommit:UploadArchive
+              - codecommit:GetUploadArchiveStatus
+            Resource:
+              - !GetAtt MoodleRepo.Arn
+              - !Join [ "", [ !GetAtt MoodleRepo.Arn, "/*" ] ]
 
   PipelineHelperASGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -281,9 +337,6 @@ Resources:
                   ApplicationStop:
                     - location: .pipeline/stop_application.sh
                       timeout: 300
-                  BeforeInstall:
-                    - location: .pipeline/before_install.sh
-                      timeout: 600
                   AfterInstall:
                     - location: .pipeline/after_install.sh
                       timeout: 300
@@ -511,14 +564,6 @@ Resources:
               mode: 000500
               owner: root
               group: root
-            /tmp/before_install.sh:
-              content:
-                !Sub |
-                  #!/bin/bash -xe
-                  echo "Nothing to do"
-              mode: 000500
-              owner: root
-              group: root
             /tmp/moodle-git-config.sh:
               content: !Sub |
                   #!/bin/bash -x
@@ -635,7 +680,6 @@ Resources:
           Arn: !GetAtt InstanceProfile.Arn
         ImageId: !If [UsingGraviton2Ami, !Ref LatestArmAmiId, !Ref LatestAmiId]
         InstanceType: !Ref InstanceType
-        KeyName: !Ref EC2KeyName
         SecurityGroupIds: 
           - !Ref PipelineSecurityGroup
         UserData:

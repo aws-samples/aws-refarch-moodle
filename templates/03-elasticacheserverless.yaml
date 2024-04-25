@@ -1,0 +1,82 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Moodle serverless cache cluster
+
+Parameters:
+  CacheEngineType:
+    AllowedValues:
+      - Redis
+      - Memcached
+    Default: Memcached
+    Description: Cache engine to use.
+    Type: String
+  CacheUsageType:
+    AllowedValues:
+      - application
+      - session
+    Default: session
+    Description: Session or application caching.
+    Type: String
+  ElastiCacheClusterName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Description: ElastiCache cluster name.
+    Type: String
+  ElastiCacheNodeType:
+    Description: Unused, only kept for compatibility with the non-serverless template.
+    Type: String
+    Default: cache.t2.micro
+  ElastiCacheSecurityGroup:
+    Description: ElastiCache Security Group.
+    Type: AWS::EC2::SecurityGroup::Id
+  NumberOfSubnets:
+    AllowedValues:
+    - 1
+    - 2
+    - 3
+    Default: 2
+    Description: Number of subnets. This must match your selections in the list of subnets below.
+    Type: String 
+  Subnet:
+    Description: Select existing subnets. The number selected must match the number of subnets above. Subnets selected must be in separate AZs.
+    Type: List<AWS::EC2::Subnet::Id>
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: Moodle Project Name
+    Type: String
+
+Conditions:
+  NumberOfSubnets1: !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2: !Equals [ 2, !Ref NumberOfSubnets ]
+
+Resources:
+  ElastiCacheServerless:
+    Type: AWS::ElastiCache::ServerlessCache
+    Properties:
+      Engine: !Ref CacheEngineType
+      ServerlessCacheName: !Ref ElastiCacheClusterName
+      SecurityGroupIds:
+        - !Ref ElastiCacheSecurityGroup
+      SubnetIds: !If [ NumberOfSubnets1, [ !Select [ 0, !Ref Subnet ] ],
+        !If [ NumberOfSubnets2, [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ] ],
+        [ !Select [ 0, !Ref Subnet ], !Select [ 1, !Ref Subnet ], !Select [ 2, !Ref Subnet ] ] ] ]
+
+  ElastiCacheClusterEndpoint:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/Cache/', !Ref CacheUsageType, '/ElastiCacheClusterEndpoint' ] ]
+      Description: ElastiCache Cluster Endpoint
+      Type: String
+      Value: !Join [ ':', [!GetAtt ElastiCacheServerless.Endpoint.Address, !GetAtt ElastiCacheServerless.Endpoint.Port]]
+
+  ElastiCacheEngine:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/Cache/', !Ref CacheUsageType, '/Engine' ] ]
+      Description: !Sub ElastiCache Engine Type (${CacheUsageType})
+      Type: String
+      Value: !Ref CacheEngineType
+
+Outputs:
+  ElastiCacheClusterEndpointAddress:
+    Value: !Join [ ':', [!GetAtt ElastiCacheServerless.Endpoint.Address, !GetAtt ElastiCacheServerless.Endpoint.Port]]

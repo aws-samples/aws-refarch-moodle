@@ -1,28 +1,8 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
-
-Description: Reference Architecture to host Moodle on AWS - Creates CloudFront distribution (if selected)
-
-Metadata:
-
-  AWS::CloudFormation::Interface:
-    ParameterGroups:
-    - Label:
-        default: AWS Parameters
-      Parameters:
-        - CloudFrontAcmCertificate
-        - DomainName
-        - PublicAlbDnsName
-    ParameterLabels:
-      CloudFrontAcmCertificate:
-        default: CloudFront Certificate ARN
-      PublicAlbDnsName:
-        default: Public ALB DNS Name
-      DomainName:
-        default: Domain name of the Moodle site
+Description: Moodle CloudFront distribution
 
 Parameters:
-
   CloudFrontAcmCertificate:
     AllowedPattern: ^$|(arn:aws:acm:)([a-z0-9/:-])*([a-z0-9])$
     Description: '[ Optional ] The AWS Certification Manager certificate ARN for the CloudFront distribution certificate - this certificate should be created in the us-east-1 (N. Virginia) region and must reference the Moodle domain name you use below.'
@@ -36,18 +16,12 @@ Parameters:
     Type: String
 
 Conditions:
-
-  SslCertificate:
-    !Not [ !Equals [ '', !Ref CloudFrontAcmCertificate ] ]
-  NoSslCertificate:
-    !Equals [ '', !Ref CloudFrontAcmCertificate ]
-  DomainName:
-    !Not [ !Equals [ '', !Ref DomainName ] ]  
-  NoDomainName:
-    !Equals [ '', !Ref DomainName ]
+  SslCertificate: !Not [ !Equals [ '', !Ref CloudFrontAcmCertificate ] ]
+  NoSslCertificate: !Equals [ '', !Ref CloudFrontAcmCertificate ]
+  DomainName: !Not [ !Equals [ '', !Ref DomainName ] ]  
+  NoDomainName: !Equals [ '', !Ref DomainName ]
 
 Resources:
-
   CloudFrontDistributionNoSslCertificate:
     Type: AWS::CloudFront::Distribution
     Condition: NoSslCertificate
@@ -85,6 +59,7 @@ Resources:
         HttpVersion: http2and3
         ViewerCertificate:
           CloudFrontDefaultCertificate: true
+          MinimumProtocolVersion: TLSv1.2_2021
 
   CloudFrontDistributionSslCertificate:
     Type: AWS::CloudFront::Distribution
@@ -126,9 +101,8 @@ Resources:
         ViewerCertificate:
           AcmCertificateArn: !Ref CloudFrontAcmCertificate
           SslSupportMethod: sni-only
-          MinimumProtocolVersion: TLSv1.2_2019
+          MinimumProtocolVersion: TLSv1.2_2021
 
 Outputs:
-
   DnsName:
     Value: !If [ NoSslCertificate, !GetAtt CloudFrontDistributionNoSslCertificate.DomainName, !GetAtt CloudFrontDistributionSslCertificate.DomainName ]
