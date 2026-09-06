@@ -118,6 +118,14 @@ Parameters:
       - m7g.8xlarge
       - m7g.12xlarge
       - m7g.16xlarge
+      - m8g.medium
+      - m8g.large
+      - m8g.xlarge
+      - m8g.2xlarge
+      - m8g.4xlarge
+      - m8g.8xlarge
+      - m8g.12xlarge
+      - m8g.16xlarge
       - c6g.large 
       - c6g.xlarge 
       - c6g.2xlarge 
@@ -174,6 +182,7 @@ Conditions:
     - !Equals ["c7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["m6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["m7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
+    - !Equals ["m8",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["r6",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     - !Equals ["r7",!Select [0, !Split [ "g.", !Ref WebInstanceType]]]
     
@@ -348,18 +357,20 @@ Resources:
               amazon-cloudwatch-agent: []
               ruby3.2: []
               httpd: []
-              php8.1: []
-              php8.1-gd: []
-              php8.1-soap: []
-              php8.1-intl: []
-              php8.1-mbstring: []
-              php8.1-xml: []
-              php8.1-opcache: []
-              php8.1-fpm: []
-              php8.1-pgsql: []
-              php8.1-mysqlnd: []
+              php8.3: []
+              php8.3-gd: []
+              php8.3-soap: []
+              php8.3-intl: []
+              php8.3-mbstring: []
+              php8.3-xml: []
+              php8.3-zip: []
+              php8.3-opcache: []
+              php8.3-fpm: []
+              php8.3-pgsql: []
+              php8.3-mysqlnd: []
               cronie: []
-              php8.1-devel: []
+              php8.3-devel: []
+              php8.3-process: []
               php-pear: []
               libzip: []
               libzip-devel: []
@@ -450,26 +461,22 @@ Resources:
               content: !Sub |
                 #!/bin/bash -xe
 
-                # Below to be able to compile zip.so for the PHP Zip library that's not in the available packages...
-                pecl install zip
-                echo "extension=zip.so;" > /etc/php.d/50-zip.ini
-
-                # Install Sodium
-                pecl install -f libsodium
-                echo "extension=sodium.so;" > /etc/php.d/50-sodium.ini
-
                 # Install Redis client as well as related extensions - see here https://github.com/amazonlinux/amazon-linux-2023/issues/328
-                pear update-channels
-                pecl update-channels
-                /usr/bin/yes 'no' | pecl install igbinary
+                # pecl's own channel-discovery HTTP client cannot parse chunked-encoding responses from pecl.php.net
+                # (pear/pear-core#151), so download each release tarball with curl and install from the local file.
+                cd /tmp
+                for pkg in igbinary msgpack zstd lzf redis; do
+                  curl -fsSL -o "$pkg.tgz" "https://pecl.php.net/get/$pkg"
+                done
+                /usr/bin/yes 'no' | pecl install ./igbinary.tgz
                 echo 'extension=igbinary.so' > /etc/php.d/30-igbinary.ini
-                /usr/bin/yes 'no' | pecl install msgpack
+                /usr/bin/yes 'no' | pecl install ./msgpack.tgz
                 echo 'extension=msgpack.so' > /etc/php.d/30-msgpack.ini
-                /usr/bin/yes 'no' | pecl install zstd
+                /usr/bin/yes 'no' | pecl install ./zstd.tgz
                 echo 'extension=zstd.so' > /etc/php.d/40-zstd.ini
-                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-lzf-better-compression="no"' lzf
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-lzf-better-compression="no"' ./lzf.tgz
                 echo 'extension=lzf.so' > /etc/php.d/40-lzf.ini
-                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-redis-igbinary="yes" enable-redis-lzf="yes" enable-redis-zstd="yes" enable-redis-msgpack="yes" enable-redis-lz4="yes" with-liblz4="yes"' redis
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-redis-igbinary="yes" enable-redis-lzf="yes" enable-redis-zstd="yes" enable-redis-msgpack="yes" enable-redis-lz4="yes" with-liblz4="yes"' ./redis.tgz
                 echo 'extension=redis.so' > /etc/php.d/41-redis.ini
 
                 # Adjust base php.ini
@@ -480,8 +487,8 @@ Resources:
                 if [ ! -f /etc/httpd/conf.d/moodle.conf ]; then                    
                    touch /etc/httpd/conf.d/moodle.conf
                    echo 'ServerName 127.0.0.1:80' >> /etc/httpd/conf.d/moodle.conf
-                   echo 'DocumentRoot /var/www/moodle/html' >> /etc/httpd/conf.d/moodle.conf
-                   echo '<Directory /var/www/moodle/html>' >> /etc/httpd/conf.d/moodle.conf
+                   echo 'DocumentRoot /var/www/moodle/html/public' >> /etc/httpd/conf.d/moodle.conf
+                   echo '<Directory /var/www/moodle/html/public>' >> /etc/httpd/conf.d/moodle.conf
                    echo '  Options Indexes FollowSymLinks' >> /etc/httpd/conf.d/moodle.conf
                    echo '  AllowOverride All' >> /etc/httpd/conf.d/moodle.conf
                    echo '  Require all granted' >> /etc/httpd/conf.d/moodle.conf
@@ -515,7 +522,8 @@ Resources:
                 #mv amazon-elasticache-cluster-client.so /usr/lib64/php/modules/
                 #echo 'extension=amazon-elasticache-cluster-client.so;' > /etc/php.d/50-elasticache.ini
                 # Install Memcached client - note that ElastiCache client is failing on AL2023
-                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' memcached
+                curl -fsSL -o /tmp/memcached.tgz https://pecl.php.net/get/memcached
+                /usr/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' /tmp/memcached.tgz
                 echo 'extension=memcached.so' > /etc/php.d/41-memcached.ini
 
                 # Mount EFS
@@ -546,7 +554,8 @@ Resources:
                   #mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 $EnvElasticFileSystem.efs.${AWS::Region}.amazonaws.com:/temp /var/www/moodle/temp
                 fi
 
-                cp /tmp/status.txt /var/www/moodle/html/status.txt
+                mkdir -p /var/www/moodle/html/public
+                cp /tmp/status.txt /var/www/moodle/html/public/status.txt
               mode: 000500
               owner: root
               group: root

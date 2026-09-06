@@ -504,6 +504,14 @@ Parameters:
       - m7g.8xlarge
       - m7g.12xlarge
       - m7g.16xlarge
+      - m8g.medium
+      - m8g.large
+      - m8g.xlarge
+      - m8g.2xlarge
+      - m8g.4xlarge
+      - m8g.8xlarge
+      - m8g.12xlarge
+      - m8g.16xlarge
       - c6g.large 
       - c6g.xlarge 
       - c6g.2xlarge 
@@ -529,7 +537,7 @@ Parameters:
       - c7g.12xlarge
       - c7g.16xlarge
     ConstraintDescription: Must be a valid Amazon EC2 instance type.
-    Default: c7g.xlarge
+    Default: m8g.large
     Description: The Amazon EC2 instance type for your web instances.
     Type: String
   HostedZoneName:
@@ -629,7 +637,7 @@ Parameters:
     Type: String
     Default: hello@yourdomain.com
   MoodleDirectDownloadURL:
-    Default: "https://download.moodle.org/download.php/direct/stable404/moodle-4.4.tgz"
+    Default: "https://download.moodle.org/download.php/direct/stable502/moodle-5.2.tgz"
     Description: Specifies the TGZ Moodle direct download URL
     Type: String
 
