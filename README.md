@@ -86,10 +86,12 @@ Amazon Elastic File System (Amazon EFS) provides simple, scalable file storage i
 $CFG->dirroot = '/var/www/moodle/html'        #Stored on root EBS volume
 $CFG->localcachedir = '/var/www/moodle/local' #Stored on root EBS volume 
 
-$CFG->dataroot = '/var/www/moodle/data'       #Stored on shared EFS filesystem
-$CFG->cachedir = '/var/www/moodle/cache'      #Stored on shared EFS filesystem
-$CFG->tempdir = '/var/www/moodle/temp'        #Stored on shared EFS filesystem
+$CFG->dataroot = '/var/www/moodle/data'       #Stored on shared file system
+$CFG->cachedir = '/var/www/moodle/cache'      #Stored on shared file system
+$CFG->tempdir = '/var/www/moodle/temp'        #Stored on shared file system
 ```
+
+The shared file system is Amazon EFS by default, or [Amazon S3 Files](#amazon-s3-files-alternative-to-efs) when `SharedStorageType=S3Files` is set.
 
 With [elastic](https://docs.aws.amazon.com/efs/latest/ug/performance.html#elastic) throughput type, Amazon EFS automatically scales throughput performance up or down to meet the needs of your workload activity. You don't need to specify or provision the throughput capacity to meet your application needs. 
 
