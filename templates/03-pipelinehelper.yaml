@@ -177,7 +177,7 @@ Parameters:
     Description: Specifies the minimum number of EC2 instances in the Web Autoscaling Group.
     Type: String
   MoodleDirectDownloadURL:
-    Default: "https://download.moodle.org/download.php/direct/stable404/moodle-4.4.tgz"
+    Default: "https://download.moodle.org/download.php/direct/stable502/moodle-5.2.tgz"
     Description: Specifies the TGZ Moodle direct download URL
     Type: String
 
@@ -190,6 +190,7 @@ Conditions:
     - !Equals ["c7",!Select [0, !Split [ "g.", !Ref InstanceType]]]
     - !Equals ["m6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
     - !Equals ["m7",!Select [0, !Split [ "g.", !Ref InstanceType]]]
+    - !Equals ["m8",!Select [0, !Split [ "g.", !Ref InstanceType]]]
     - !Equals ["r6",!Select [0, !Split [ "g.", !Ref InstanceType]]]
     - !Equals ["r7",!Select [0, !Split [ "g.", !Ref InstanceType]]]
 

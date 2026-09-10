@@ -4,13 +4,13 @@
 
 ## Overview
 
-This repository provides set of CloudFormation nested templates that deploy a highly available, elastic, and scalable [Moodle™ 4.4](https://docs.moodle.org) environment on AWS. Moodle™ offers a learning platform that provides educators, administrators and learners a single robust, secure and integrated system for personalized learning environment. 
+This repository provides set of CloudFormation nested templates that deploy a highly available, elastic, and scalable [Moodle™ 5.2](https://docs.moodle.org) environment on AWS. Moodle™ offers a learning platform that provides educators, administrators and learners a single robust, secure and integrated system for personalized learning environment. 
 
-These nested templates can be used to deploy Moodle™ on AWS using [Amazon Virtual Private Cloud (Amazon VPC)](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Introduction.html), [Amazon Elastic Compute Cloud (Amazon EC2)](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html), [Auto Scaling](http://docs.aws.amazon.com/autoscaling/latest/userguide/WhatIsAutoScaling.html), [Elastic Load Balancing (Application Load Balancer)](http://docs.aws.amazon.com/elasticbalancing/latest/application/introduction.html), [Amazon Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_AuroraOverview.html), [Amazon ElastiCache](http://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/WhatIs.html), [Amazon Elastic File System (Amazon EFS)](http://docs.aws.amazon.com/efs/latest/ug/whatisefs.html), [Amazon CloudFront](http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html), [Amazon Route 53](http://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html), [Amazon Certificate Manager (Amazon ACM)](http://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html)  with [AWS CloudFormation](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) in YAML format. 
+These nested templates can be used to deploy Moodle™ on AWS using [Amazon Virtual Private Cloud (Amazon VPC)](http://docs.aws.amazon.com/AmazonVPC/latest/UserGuide/VPC_Introduction.html), [Amazon Elastic Compute Cloud (Amazon EC2)](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/concepts.html), [Auto Scaling](http://docs.aws.amazon.com/autoscaling/latest/userguide/WhatIsAutoScaling.html), [Elastic Load Balancing (Application Load Balancer)](http://docs.aws.amazon.com/elasticbalancing/latest/application/introduction.html), [Amazon Aurora](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/CHAP_AuroraOverview.html), [Amazon ElastiCache](http://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/WhatIs.html), [Amazon Elastic File System (Amazon EFS)](http://docs.aws.amazon.com/efs/latest/ug/whatisefs.html) or optionally [Amazon S3 Files](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html) for shared storage, [Amazon CloudFront](http://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html), [Amazon Route 53](http://docs.aws.amazon.com/Route53/latest/DeveloperGuide/Welcome.html), [Amazon Certificate Manager (Amazon ACM)](http://docs.aws.amazon.com/acm/latest/userguide/acm-overview.html)  with [AWS CloudFormation](http://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/Welcome.html) in YAML format. 
 
 This architecture is expansive enough to meet the needs of large institutions / organizations. Smaller organizations can choose to run a subset of the template to meet their needs. These templates can also be run individually and may be modified.
 
-This template currently uses [Moodle™ 4.4](https://download.moodle.org/download.php/stable404/moodle-4.4.tgz) stable version downloaded directly from [download.moodle.org](https://download.moodle.org/releases/latest/). Details for downloading are available in the [templates/03-pipelinehelper.yaml](templates/03-pipelinehelper.yaml) template file.
+This template currently uses [Moodle™ 5.2](https://download.moodle.org/download.php/direct/stable502/moodle-5.2.tgz) stable version downloaded directly from [download.moodle.org](https://download.moodle.org/releases/latest/). Moodle 5.2 requires PHP 8.3 and serves HTTP requests from the `public/` directory; the web template installs PHP 8.3 and configures that document root. Details for downloading are available in the [templates/03-pipelinehelper.yaml](templates/03-pipelinehelper.yaml) template file.
 
 ## Deployment guide
 
@@ -63,6 +63,8 @@ The following sections describe the architecture and its components. This archit
 
 ![](images/aws-refarch-moodle-architecture.png)
 
+*The diagram above shows the default shared-storage path (Amazon EFS). Setting `SharedStorageType=S3Files` replaces the EFS file system with an [Amazon S3 Files](#amazon-s3-files-alternative-to-efs) file system backed by an S3 bucket; every other component in the diagram is unchanged.*
+
 ### AWS Certificate Manager
 
 AWS Certificate Manager lets you easily provision, manage, and deploy Secure Sockets Layer/Transport Layer Security (SSL/TLS) certificates for use with AWS services. You should use SSL/TLS to protect data in transit, including sessions and passwords. If you plan to use SSL/TLS, you must create or import a certificate using AWS Certificate Manager before you deploy the template. In addition, if wish to use CloudFront and host Moodle™ in a region other than us-east-1, you must create or import the certificate in both us-east-1 and the region you are hosting Moodle™ in. CloudFront requires certificates in the us-east-1 region.
@@ -84,17 +86,55 @@ Amazon Elastic File System (Amazon EFS) provides simple, scalable file storage i
 $CFG->dirroot = '/var/www/moodle/html'        #Stored on root EBS volume
 $CFG->localcachedir = '/var/www/moodle/local' #Stored on root EBS volume 
 
-$CFG->dataroot = '/var/www/moodle/data'       #Stored on shared EFS filesystem
-$CFG->cachedir = '/var/www/moodle/cache'      #Stored on shared EFS filesystem
-$CFG->tempdir = '/var/www/moodle/temp'        #Stored on shared EFS filesystem
+$CFG->dataroot = '/var/www/moodle/data'       #Stored on shared file system
+$CFG->cachedir = '/var/www/moodle/cache'      #Stored on shared file system
+$CFG->tempdir = '/var/www/moodle/temp'        #Stored on shared file system
 ```
+
+The shared file system is Amazon EFS by default, or [Amazon S3 Files](#amazon-s3-files-alternative-to-efs) when `SharedStorageType=S3Files` is set.
 
 With [elastic](https://docs.aws.amazon.com/efs/latest/ug/performance.html#elastic) throughput type, Amazon EFS automatically scales throughput performance up or down to meet the needs of your workload activity. You don't need to specify or provision the throughput capacity to meet your application needs. 
 
 *Moodle™ recommends the `dirroot` be set as read only for the apache process in a clustered environment [[Reference]](https://docs.moodle.org/400/en/Server_cluster#.24CFG-.3Edirroot). You should not install plugins to a server cluster from the admin page. `Moodle™ recommends manually installing plugins on each server during planned maintenance`. To follow the infrastructure-as-code methodology, installation/upgrade of plugins can be managed using AWS CodePipeline scripts. See the `.pipeline` folder inside your git-remote-s3 Moodle™ repository.
 
+### Amazon S3 Files (alternative to EFS)
+
+This template optionally supports [Amazon S3 Files](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files.html) as an alternative shared file system for `moodledata`, backed directly by an S3 bucket instead of EFS. Choose this by setting the `SharedStorageType` parameter to `S3Files` (default remains `EFS`). S3 Files exposes an NFS-compatible mount on top of your S3 bucket, so the web servers' `dataroot`/`cachedir`/`tempdir` layout described above is unchanged; only the backing file system differs.
+
+* [S3 Files getting started guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files-getting-started.html)
+* [S3 Files mounting reference](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files-mounting.html)
+* [S3 Files prerequisites (bucket versioning/encryption, IAM roles, client install)](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files-prereq-policies.html)
+
+**Parameters:**
+
+| Parameter | Description |
+| --- | --- |
+| `SharedStorageType` | `EFS` (default) or `S3Files`. |
+| `S3FilesBucket` | Required when `SharedStorageType=S3Files` and no existing file system is supplied. Must be an S3 general purpose bucket in the same region, with S3 Versioning enabled and either SSE-S3 or SSE-KMS encryption. |
+| `S3FilesBucketPrefix` | Optional prefix within the bucket to scope the file system to. |
+| `S3FilesExistingFileSystemId` | Optional. Reuse an existing S3 Files file system (`fs-...`) instead of creating a new one; when set, `S3FilesBucket` is ignored. |
+
+**When to choose S3 Files over EFS:**
+
+* You want `moodledata` backed directly by an S3 bucket you already manage (e.g. for existing bucket-level lifecycle rules, replication, or cross-account access policies), rather than a first-class EFS file system.
+* You want to reuse a single S3 Files file system, already scoped to a given bucket, across more than one Moodle™ deployment or other application, via `S3FilesExistingFileSystemId`.
+* Your organization's data governance model is S3-bucket-centric (backup, encryption, access logging already built around S3), and adding a parallel EFS file system would duplicate that governance surface.
+
+**When to stay with EFS:**
+
+* You want the simplest, most battle-tested path: EFS is this template's default and the one used by the majority of Moodle™-on-AWS deployments to date.
+* You need the lowest mount latency for small, frequent file operations. EFS is a native NFS file system; S3 Files mounts through an `amazon-efs-utils`-provided NFS-compatible proxy on top of S3, which is a different performance profile and is optimized for S3-bucket-centric workflows rather than latency-sensitive small-file access patterns.
+* You are not already standardizing this workload's storage governance around S3 buckets.
+
+**Prerequisites specific to S3 Files:**
+
+* The target S3 bucket must have [S3 Versioning enabled](https://docs.aws.amazon.com/AmazonS3/latest/userguide/manage-versioning-examples.html) -- S3 Files uses version-specific S3 API operations to keep the mounted file system and the bucket in sync.
+* The target S3 bucket must use SSE-S3 or SSE-KMS encryption.
+* The web tier's instance role is granted the [`AmazonS3FilesClientFullAccess`](https://docs.aws.amazon.com/AmazonS3/latest/userguide/s3-files-security-iam-awsmanpol.html) managed policy so the mount helper can connect to the file system; this template attaches it automatically when `SharedStorageType=S3Files`.
+* The [`amazon-efs-utils`](https://github.com/aws/efs-utils) package (v3.0.0+) is required on the instance for both EFS and S3 Files mounting; this template installs it regardless of which backend you choose.
+
 ### AWS CodePipeline
-This CloudFormation templates use AWS Services to create a CI/CD pipeline to help manage your Moodle™ environment. AWS S3 will host a git repository for your Moodle™ environment using [git-remote-s3](https://github.com/awslabs/git-remote-s3). It initially pulls the source from [download.moodle.org.](https://download.moodle.org/download.php/stable404/moodle-4.4.tgz). It also adds files required to automate the deployment pipeline. You can explore these files under the `.pipeline` folder.
+This CloudFormation templates use AWS Services to create a CI/CD pipeline to help manage your Moodle™ environment. AWS S3 will host a git repository for your Moodle™ environment using [git-remote-s3](https://github.com/awslabs/git-remote-s3). It initially pulls the source from [download.moodle.org.](https://download.moodle.org/download.php/direct/stable502/moodle-5.2.tgz). It also adds files required to automate the deployment pipeline. You can explore these files under the `.pipeline` folder.
 This template also creates an AWS CodePipeline configuration that build artifacts to deploy on EC2 with autoscaling groups using AWS CodeBuild and AWS CodeDeploy. It can optionally support a BLUE_GREEN deployment.
 
 *You can customize the overall pipeline for your Moodle™ setup.*

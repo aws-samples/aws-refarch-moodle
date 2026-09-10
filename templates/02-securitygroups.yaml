@@ -87,6 +87,32 @@ Resources:
       SourceSecurityGroupId: !GetAtt EfsSecurityGroup.GroupId
       GroupId: !GetAtt EfsSecurityGroup.GroupId
 
+  S3FilesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: S3 Files Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          Description: "Allow NFS access from instances in the Web Security Group"
+          FromPort: 2049
+          ToPort: 2049
+          SourceSecurityGroupId: !Ref WebSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: -1
+        Description: "Block all egress"
+        CidrIp: 127.0.0.1/32
+      VpcId: !Ref Vpc
+
+  S3FilesSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      IpProtocol: tcp
+      Description: "Allow NFS access from instances in S3 Files Security Group"
+      FromPort: 2049
+      ToPort: 2049
+      SourceSecurityGroupId: !GetAtt S3FilesSecurityGroup.GroupId
+      GroupId: !GetAtt S3FilesSecurityGroup.GroupId
+
   PublicAlbSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -154,6 +180,8 @@ Outputs:
     Value: !Ref DatabaseSecurityGroup
   EfsSecurityGroup:
     Value: !Ref EfsSecurityGroup
+  S3FilesSecurityGroup:
+    Value: !Ref S3FilesSecurityGroup
   ElastiCacheSecurityGroup:
     Value: !Ref ElastiCacheSecurityGroup
   PublicAlbSecurityGroup:
