@@ -1,0 +1,196 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: Moodle S3 Files shared file system (alternative to EFS - moodledata backed by an S3 bucket)
+
+Parameters:
+  ExistingFileSystemId:
+    Description: '[ Optional ] An existing S3 Files file system ID to reuse. If set, no new file system is created.'
+    Type: String
+    Default: ''
+  Bucket:
+    Description: S3 bucket name backing the file system. Required when ExistingFileSystemId is not set. Must have versioning enabled.
+    Type: String
+    Default: ''
+  BucketPrefix:
+    Description: '[ Optional ] Prefix within the bucket to scope the file system to.'
+    Type: String
+    Default: ''
+  Cmk:
+    Description: '[ Optional ] An existing AWS KMS Customer Master Key (CMK) to encrypt the file system. Leave blank to use SSE-S3.'
+    Type: String
+    Default: ''
+  NumberOfSubnets:
+    AllowedValues:
+    - 1
+    - 2
+    - 3
+    Default: 2
+    Description: Number of subnets. This must match your selections in the list of Subnets below.
+    Type: String
+  SecurityGroup:
+    Description: Select the S3 Files security group (must allow inbound TCP 2049 from the web security group).
+    Type: AWS::EC2::SecurityGroup::Id
+  Subnet:
+    Description: Select existing subnets.
+    Type: List<AWS::EC2::Subnet::Id>
+  ProjectName:
+    AllowedPattern: ^([a-zA-Z0-9]*)$
+    Default: App
+    Description: The Moodle Project Name
+    Type: String
+  EnableMountTargets:
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+    Description: Internal toggle used for safe mount-target FileSystemId updates (delete-then-recreate instead of an in-place replacement that collides with the one-per-AZ limit).
+    Type: String
+
+Conditions:
+  NumberOfSubnets1:
+      !Equals [ 1, !Ref NumberOfSubnets ]
+  NumberOfSubnets2:
+      !Equals [ 2, !Ref NumberOfSubnets ]
+  NumberOfSubnets3:
+      !Equals [ 3, !Ref NumberOfSubnets ]
+  Subnet0: !Or
+    - !Condition NumberOfSubnets1
+    - !Condition NumberOfSubnets2
+    - !Condition NumberOfSubnets3
+  Subnet1: !Or
+    - !Condition NumberOfSubnets2
+    - !Condition NumberOfSubnets3
+  Subnet2: !Condition NumberOfSubnets3
+  UseAWS-ManagedCMK:
+    !Equals ['', !Ref Cmk]
+  UseExistingFileSystem:
+    !Not [ !Equals ['', !Ref ExistingFileSystemId] ]
+  CreateNewFileSystem:
+    !Equals ['', !Ref ExistingFileSystemId]
+  HasPrefix:
+    !Not [ !Equals ['', !Ref BucketPrefix] ]
+  MountTargetsEnabled:
+    !Equals [ 'true', !Ref EnableMountTargets ]
+  CreateMountTarget0:
+    !And [ !Condition Subnet0, !Condition MountTargetsEnabled ]
+  CreateMountTarget1:
+    !And [ !Condition Subnet1, !Condition MountTargetsEnabled ]
+  CreateMountTarget2:
+    !And [ !Condition Subnet2, !Condition MountTargetsEnabled ]
+
+Resources:
+  # IAM role S3 Files assumes to synchronize the file system with the S3 bucket.
+  # Only needed when creating a new file system - an existing one already has its own role.
+  S3FilesServiceRole:
+    Condition: CreateNewFileSystem
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: elasticfilesystem.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub 'arn:aws:s3files:${AWS::Region}:${AWS::AccountId}:file-system/*'
+      Policies:
+        - PolicyName: S3FilesBucketSync
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Sid: S3BucketPermissions
+                Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                Resource: !Sub 'arn:aws:s3:::${Bucket}'
+                Condition:
+                  StringEquals:
+                    aws:ResourceAccount: !Ref AWS::AccountId
+              - Sid: S3ObjectPermissions
+                Effect: Allow
+                Action:
+                  - s3:AbortMultipartUpload
+                  - s3:DeleteObject*
+                  - s3:GetObject*
+                  - s3:List*
+                  - s3:PutObject*
+                Resource: !Sub 'arn:aws:s3:::${Bucket}/*'
+                Condition:
+                  StringEquals:
+                    aws:ResourceAccount: !Ref AWS::AccountId
+              - Sid: EventBridgeManage
+                Effect: Allow
+                Action:
+                  - events:DeleteRule
+                  - events:DisableRule
+                  - events:EnableRule
+                  - events:PutRule
+                  - events:PutTargets
+                  - events:RemoveTargets
+                Condition:
+                  StringEquals:
+                    events:ManagedBy: elasticfilesystem.amazonaws.com
+                Resource:
+                  - 'arn:aws:events:*:*:rule/DO-NOT-DELETE-S3-Files*'
+              - Sid: EventBridgeRead
+                Effect: Allow
+                Action:
+                  - events:DescribeRule
+                  - events:ListRuleNamesByTarget
+                  - events:ListRules
+                  - events:ListTargetsByRule
+                Resource:
+                  - 'arn:aws:events:*:*:rule/*'
+
+  S3FilesFileSystem:
+    Condition: CreateNewFileSystem
+    Type: AWS::S3Files::FileSystem
+    Properties:
+      Bucket: !Sub 'arn:aws:s3:::${Bucket}'
+      Prefix: !If [ HasPrefix, !Ref BucketPrefix, !Ref 'AWS::NoValue' ]
+      RoleArn: !GetAtt S3FilesServiceRole.Arn
+      KmsKeyId: !If [ UseAWS-ManagedCMK, !Ref 'AWS::NoValue', !Ref Cmk ]
+
+  S3FilesMountTarget0:
+    Condition: CreateMountTarget0
+    Type: AWS::S3Files::MountTarget
+    Properties:
+      FileSystemId: !If [ UseExistingFileSystem, !Ref ExistingFileSystemId, !GetAtt S3FilesFileSystem.FileSystemId ]
+      SecurityGroups:
+      - !Ref SecurityGroup
+      SubnetId: !Select [ 0, !Ref Subnet ]
+
+  S3FilesMountTarget1:
+    Condition: CreateMountTarget1
+    Type: AWS::S3Files::MountTarget
+    Properties:
+      FileSystemId: !If [ UseExistingFileSystem, !Ref ExistingFileSystemId, !GetAtt S3FilesFileSystem.FileSystemId ]
+      SecurityGroups:
+      - !Ref SecurityGroup
+      SubnetId: !Select [ 1, !Ref Subnet ]
+
+  S3FilesMountTarget2:
+    Condition: CreateMountTarget2
+    Type: AWS::S3Files::MountTarget
+    Properties:
+      FileSystemId: !If [ UseExistingFileSystem, !Ref ExistingFileSystemId, !GetAtt S3FilesFileSystem.FileSystemId ]
+      SecurityGroups:
+      - !Ref SecurityGroup
+      SubnetId: !Select [ 2, !Ref Subnet ]
+
+  S3FilesFileSystemParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Join [ '', [ '/Moodle/',!Ref ProjectName, '/SharedFile/S3FilesFileSystem' ] ]
+      Type: String
+      Value: !If [ UseExistingFileSystem, !Ref ExistingFileSystemId, !GetAtt S3FilesFileSystem.FileSystemId ]
+      Description: Moodle S3 Files file system Id
+
+Outputs:
+  S3FilesFileSystem:
+    Value: !If [ UseExistingFileSystem, !Ref ExistingFileSystemId, !GetAtt S3FilesFileSystem.FileSystemId ]

@@ -30,7 +30,12 @@ Metadata:
     - Label:
         default: Shared File Storage
       Parameters:
+        - SharedStorageType
         - SharedStorageEncryptionCmk
+        - S3FilesBucket
+        - S3FilesBucketPrefix
+        - S3FilesExistingFileSystemId
+        - S3FilesEnableMountTargets
     - Label:
         default: Database Tier
       Parameters:
@@ -252,6 +257,36 @@ Parameters:
     AllowedPattern: ^$|(arn:aws:kms:)([a-z0-9/:-])*([a-z0-9])$
     ConstraintDescription: Must be an existing ARN for an AWS KMS CMK.
     Description: '[ Optional ] The AWS KMS customer-managed CMK ARN to encrypt & decrypt the Shared file storage.'
+    Type: String
+    Default: ''
+  SharedStorageType:
+    AllowedValues:
+      - EFS
+      - S3Files
+    Default: EFS
+    Description: Storage backend for moodledata (shared files). EFS is the default. S3Files backs moodledata with an S3 bucket via a managed NFS layer.
+    Type: String
+  S3FilesBucket:
+    Description: '[ Required only when SharedStorageType is S3Files and S3FilesExistingFileSystemId is blank ] S3 bucket name to back the file system. Must have versioning enabled.'
+    Type: String
+    Default: ''
+  S3FilesBucketPrefix:
+    Description: '[ Optional, S3Files only ] Prefix within the bucket to scope the file system to.'
+    Type: String
+    Default: ''
+  S3FilesExistingFileSystemId:
+    AllowedPattern: ^$|(fs-[0-9a-f]{17,40})$
+    ConstraintDescription: Must be blank or a valid S3 Files file system id (fs-xxxxxxxxxxxxxxxxx).
+    Description: '[ Optional, S3Files only ] An existing S3 Files file system id to reuse instead of creating a new one.'
+    Type: String
+    Default: ''
+  S3FilesEnableMountTargets:
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Default: 'true'
+    Description: '[ Internal, S3Files only ] Leave as true. Only set to false transiently when changing the S3Files file system''s underlying id, to delete mount targets before recreating them (avoids a one-per-AZ collision on update).'
+    Type: String
     Type: String
  
   CacheEngineType:
@@ -668,6 +703,11 @@ Conditions:
         !Not [!Equals ['', !Ref HostedZoneName ] ], #with domain name internal
         !Equals [ true, !Ref UseCloudFrontBoolean ], #with cloudfront
         !Equals ['', !Ref CloudFrontAcmCertificate ]  #no SSL certificate
+      ],
+      !And [
+        !Equals [ 'S3Files', !Ref SharedStorageType ], #S3Files storage chosen
+        !Equals ['', !Ref S3FilesBucket ], #no bucket given
+        !Equals ['', !Ref S3FilesExistingFileSystemId ] #and no existing file system id to reuse
       ]
     ]
   DeployCloudFront: 
@@ -683,7 +723,11 @@ Conditions:
       ]
    ]
   SharedStorageEFS:
-    !Equals ['EFS', 'EFS' ]
+    !Equals ['EFS', !Ref SharedStorageType ]
+  SharedStorageS3Files:
+    !Equals ['S3Files', !Ref SharedStorageType ]
+  S3FilesUseExisting:
+    !Not [ !Equals ['', !Ref S3FilesExistingFileSystemId] ]
   DeployUsingRDSServerless:
     !Equals [ true, !Ref DatabaseUseServerless ]
   DeployUsingRDSInstances:
@@ -879,6 +923,32 @@ Resources:
         ProjectName:
           !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/03-efsfilesystem.yaml'
+
+  sharedS3Files:
+    Condition: SharedStorageS3Files
+    DependsOn: securitygroups
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      Parameters:
+        ExistingFileSystemId:
+          !Ref S3FilesExistingFileSystemId
+        Bucket:
+          !Ref S3FilesBucket
+        BucketPrefix:
+          !Ref S3FilesBucketPrefix
+        Cmk:
+          !Ref SharedStorageEncryptionCmk
+        EnableMountTargets:
+          !Ref S3FilesEnableMountTargets
+        SecurityGroup:
+         !GetAtt [ securitygroups, Outputs.S3FilesSecurityGroup ]
+        NumberOfSubnets:
+          !Ref NumberOfAZs
+        Subnet:
+          !GetAtt [ vpc, Outputs.DataSubnet ]
+        ProjectName:
+          !Sub '${AWS::StackName}'
+      TemplateURL: !Sub '${DeploymentLocation}/03-s3filesystem.yaml'
   
   pipelineHelper:
     DependsOn: securitygroups
@@ -959,6 +1029,10 @@ Resources:
         WebSecurityGroup:
           !GetAtt [ securitygroups, Outputs.WebSecurityGroup ]
         CodeArtifactS3BucketArn: !GetAtt [ pipelineHelper, Outputs.CodeArtifactS3BucketArn]
+        SharedStorageType:
+          !Ref SharedStorageType
+        SharedStorageReady:
+          !If [ SharedStorageEFS, !GetAtt [ sharedEFS, Outputs.ElasticFileSystem ], !GetAtt [ sharedS3Files, Outputs.S3FilesFileSystem ] ]
         ProjectName:
           !Sub '${AWS::StackName}'
       TemplateURL: !Sub '${DeploymentLocation}/04-web.yaml'

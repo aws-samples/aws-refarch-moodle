@@ -166,6 +166,17 @@ Parameters:
   CodeArtifactS3BucketArn:
     Type: "String"
     Description: Code Artifact S3 Bucket Arn
+  SharedStorageType:
+    AllowedValues:
+      - EFS
+      - S3Files
+    Default: EFS
+    Description: Storage backend for moodledata. Must match the parent stack's SharedStorageType.
+    Type: String
+  SharedStorageReady:
+    Description: Unused by the bootstrap script - forces this stack to depend on the shared storage stack finishing first.
+    Type: String
+    Default: ''
   ProjectName:
     AllowedPattern: ^([a-zA-Z0-9]*)$
     Default: App
@@ -208,7 +219,8 @@ Resources:
           - sts:AssumeRole
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore'
-        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeployLimited' 
+        - 'arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforAWSCodeDeployLimited'
+        - 'arn:aws:iam::aws:policy/AmazonS3FilesClientFullAccess'
       Path: /
       Policies:
       - PolicyName: MoodleCustomWebInstancePolicy
@@ -259,7 +271,7 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       Cooldown: '60'
-      HealthCheckGracePeriod: 120
+      HealthCheckGracePeriod: 900
       HealthCheckType: ELB
       LaunchTemplate:
         LaunchTemplateId: !Ref WebLaunchTemplate
@@ -355,6 +367,7 @@ Resources:
           packages:
             yum:
               amazon-cloudwatch-agent: []
+              amazon-efs-utils: []
               ruby3.2: []
               httpd: []
               php8.3: []
@@ -526,11 +539,32 @@ Resources:
                 /usr/bin/yes 'no' | pecl install --configureoptions 'enable-memcached-igbinary="yes" enable-memcached-msgpack="yes" enable-memcached-json="yes" enable-memcached-protocol="yes" enable-memcached-sasl="yes" enable-memcached-session="yes"' /tmp/memcached.tgz
                 echo 'extension=memcached.so' > /etc/php.d/41-memcached.ini
 
-                # Mount EFS
+                # Mount shared storage for moodledata (EFS or S3Files, per SharedStorageType)
                 availabilityzone=$(ec2-metadata -z | awk '{print $2}' | sed 's/(.)//')
                 region=$(ec2-metadata -z | awk '{print $2}' | sed 's/[a-z]$//')
                 if grep -qs '/var/www/moodle/data ' /proc/mounts; then
                   echo "/var/www/moodle/data is mounted."
+                elif [ "${SharedStorageType}" == "S3Files" ]; then
+                  export EnvS3FilesFileSystem=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/SharedFile/S3FilesFileSystem --query Parameters[0].Value)
+                  export EnvS3FilesFileSystem=`echo $EnvS3FilesFileSystem | sed -e 's/^"//' -e 's/"$//'`
+
+                  sudo mkdir -p /$EnvS3FilesFileSystem
+                  sudo mountpoint -q /$EnvS3FilesFileSystem || sudo mount -t s3files $EnvS3FilesFileSystem:/ /$EnvS3FilesFileSystem
+
+                  #Create directories for Moodle
+                  sudo mkdir -p /$EnvS3FilesFileSystem/data
+                  sudo mkdir -p /$EnvS3FilesFileSystem/cache
+                  sudo mkdir -p /$EnvS3FilesFileSystem/temp
+
+                  chown apache:apache /$EnvS3FilesFileSystem/data/
+                  chown apache:apache /$EnvS3FilesFileSystem/cache/
+                  chown apache:apache /$EnvS3FilesFileSystem/temp/
+
+                  sudo umount -f /$EnvS3FilesFileSystem
+
+                  mount -t s3files $EnvS3FilesFileSystem:/data /var/www/moodle/data
+                  #mount -t s3files $EnvS3FilesFileSystem:/cache /var/www/moodle/cache
+                  #mount -t s3files $EnvS3FilesFileSystem:/temp /var/www/moodle/temp
                 else
                   export EnvElasticFileSystem=$(aws ssm get-parameters --region $region --names /Moodle/${ProjectName}/SharedFile/ElasticFileSystem --query Parameters[0].Value)
                   export EnvElasticFileSystem=`echo $EnvElasticFileSystem | sed -e 's/^"//' -e 's/"$//'`
